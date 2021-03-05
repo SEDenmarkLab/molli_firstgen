@@ -15,8 +15,8 @@ setup(
     ],
     data_files=[],
     version="0.1.0-unstable",
-    # author="Alexander S. Shved",
-    # author_email="shvedalx@illinois.edu",
+    author="Alexander S. Shved",
+    author_email="shvedalx@illinois.edu",
     install_requires=[
         "matplotlib>=3.1.2",
         "numpy>=1.19.0",
