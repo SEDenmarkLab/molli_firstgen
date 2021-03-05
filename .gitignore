@@ -1,0 +1,8 @@
+**/*.pyc
+**/*.mol2
+**/*.xyz
+**/*.zip
+tests/
+documentation/
+notebooks/
+molli.egg-info/

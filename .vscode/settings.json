@@ -1,0 +1,5 @@
+{
+    "python.pythonPath": "/home/shvedalx/miniconda3/envs/cip38/bin/python",
+    "python.formatting.provider": "yapf",
+    "jupyter.jupyterServerType": "local"
+}
