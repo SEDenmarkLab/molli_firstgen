@@ -32,6 +32,12 @@ def split_cdxml(file_path: str) -> MolCollection:
 
     # Find all molecular fragments and text boxes
     fragments = rt.findall(".//fragment")
+
+    # So apparently chemdraw occasionally places fragments inside fragments...
+    # This makes sure that those don't get counted
+    for x in rt.findall(".//fragment//fragment"):
+        fragments.remove(x)
+
     textboxes = rt.findall("./*/t") + rt.findall("./*/group/t")
 
     assert len(fragments) == len(

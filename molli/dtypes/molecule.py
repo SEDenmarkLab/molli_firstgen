@@ -258,6 +258,11 @@ class Molecule:
             if set((s1, s2)) == set((b.a1.symbol, b.a2.symbol)):
                 dists.append(self.get_bond_length(b))
 
+        if len(dists) == 0:
+            # Emergency scenario: just average the bond lengths what we already have
+            for b in self.bonds:
+                dists.append(self.get_bond_length(b))
+
         factor = dist / np.average(dists)
         self.geom.scale(factor)
 
