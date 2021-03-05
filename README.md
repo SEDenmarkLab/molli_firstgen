@@ -2,7 +2,7 @@
 
 ## Usage
 
-*PLEASE MAKE SURE THAT **CONFORMER GENERATION CODE** GETS PROPERLY PUBLISHED BEFORE YOU CAN USE IT IN YOUR WORKFLOWS WITHOUT SHARING THE AUTHORSHIP ON PAPERS THAT USE IT*
+*PLEASE MAKE SURE THAT **CONFORMER GENERATION CODE** GETS PROPERLY PUBLISHED BEFORE YOU CAN PUBLISH YOUR WORKFLOWS WITHOUT SHARING THE AUTHORSHIP ON PAPERS*
 
 ## User Manual
 
@@ -10,8 +10,8 @@ Needs a lot of development to happen. For now, some recipes will be available as
 
 # Requirements
 
-Python >= 3.9 is required for this code to run.
-openbabel, xtb, crest, and any external packages need to be obtained separately and installed separately.
+`Python >= 3.9` is required for this code to run.
+`openbabel`, `xtb`, `crest`, and any external packages need to be obtained separately and installed separately.
 
 # Dependencies
 
@@ -32,8 +32,10 @@ This installation does not assume any intervention in the code. Most likely you 
 
 ## For development purposes
 
-This mode of installation is different in that it is easier to modify the code and have it immediately ref
-
+This mode of installation is different in that it is easier to modify the code and have it immediately available
+```
+    pip install ./ -e
+```
 # Basic Tests
 
 # Advanced Usage
