@@ -5,6 +5,7 @@ from typing import List, Callable, Any
 import json
 from zipfile import ZipFile
 from itertools import product, combinations_with_replacement
+from multiprocessing import Pool
 
 
 class MolCollection:
@@ -28,13 +29,13 @@ class MolCollection:
         elif isinstance(item, str):
             return self.molecules[self.mol_index.index(item)]
 
-    def applyfx(self, fx: Callable[[Molecule], Any], nprocs=1):
+    def applyfx(self, fx: Callable[[Molecule], Any]):
         """
         An incredibly useful *decorator* that applies a given function to all molecules in the library.
         May take advantage of multiprocessing by specifying nprocs
         Provides visual confirmation
         """
-        def inner(show_progress=True, update=1000):
+        def inner(nprocs=1, show_progress=True, update=1000):
             result = []
 
             L = len(self.mol_index)
@@ -43,12 +44,39 @@ class MolCollection:
 
             if show_progress:
                 print(f"\nApplying [{fx.__name__}] to {L} molecules:")
-            for i, m in enumerate(self.molecules):
-                result.append(fx(m))
-                if show_progress and not (i + 1) % update:
-                    print(
-                        f"{i+1:>10} molecules processed ({(i+1)/L:>6.2%}) Total WCT: {datetime.now() - start}"
-                    )
+
+            if nprocs == 1:
+                for i, m in enumerate(self.molecules):
+                    result.append(fx(m))
+                    if show_progress and not (i + 1) % update:
+                        print(
+                            f"{i+1:>10} molecules processed ({(i+1)/L:>6.2%}) Total WCT: {datetime.now() - start}"
+                        )
+
+            if nprocs > 1:
+                # This is where the multiprocessing fun starts. Buckle up!
+                if show_progress:
+                    print(f"(in {nprocs} parallel processes)")
+                workers = Pool(nprocs)
+
+                total = 0
+
+                batch_size = max(update, nprocs)
+                n_batches = L // batch_size + 1
+
+                result = []
+
+                for i in range(n_batches):
+                    chunk = self.molecules[i * batch_size :\
+                         min((i + 1) * batch_size, L)]
+                    result.extend(workers.map(fx, chunk))
+                    total += len(chunk)
+
+                    if show_progress:
+                        print(
+                            f"{total:>10} molecules processed ({total/L:>6.2%}) Total WCT: {datetime.now() - start}"
+                        )
+
             if show_progress:
                 print(f"Complete! Total WCT: {datetime.now() - start}\n")
             return result
