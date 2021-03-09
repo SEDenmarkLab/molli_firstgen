@@ -3,10 +3,12 @@
 """
 import os
 from ._core import ExternalDriver, DriverError
-from ..dtypes import Molecule
+from ..dtypes import Molecule, CartesianGeometry
 from copy import deepcopy
 from datetime import datetime
 from glob import glob
+from warnings import warn
+from typing import List
 
 
 class XTBDriver(ExternalDriver):
@@ -25,7 +27,10 @@ class XTBDriver(ExternalDriver):
                  crit: str = "tight",
                  maxiter: int = 200,
                  in_place: bool = False,
-                 constraints: str = ""):
+                 constraints: str = "",
+                 shake_sigma=0.1,
+                 shake_attempt=3,
+                 warn=True):
         """
             Perform energy minimization
             WARNING: BONDING TABLE IS NOT GOING TO BE UPDATED!
@@ -34,6 +39,11 @@ class XTBDriver(ExternalDriver):
             GFN family of methods does not fix unphysical geometries (without constraints).
 
             if in_place == True: modify the input molecule 
+
+            shake: in a situation where the termination of xtb optimization is abnormal, 
+            it is useful to shake the geometry a bit, and then reoptimize.
+            sigma: standard deviation in Angstroem
+            attempts: how many attempts before raising an exception
         """
         assert method in self.METHODS
 
@@ -60,8 +70,35 @@ class XTBDriver(ExternalDriver):
                 name,
             )
         else:
-            self("xtb", f"{name}.g0.xyz", self.METHODS[method], "--opt", crit,
-                 "--cycles", maxiter, "--namespace", name)
+            for i in range(shake_attempt):
+                # xc = None
+                try:
+                    self("xtb", f"{name}.g{i}.xyz", self.METHODS[method],
+                         "--opt", crit, "--cycles", maxiter, "--namespace",
+                         name)
+                except DriverError as de:
+                    # This is where the code gets if the original optimization failed
+                    if os.path.isfile(f"{self.cwd}/{name}.xtbopt.log"):
+                        with open(f"{self.cwd}/{name}.xtbopt.log") as f:
+                            log_geoms = CartesianGeometry.from_xyz(f.read())
+                            last, atoms, cmt = log_geoms[-1]
+                    else:
+                        with open(f"{self.cwd}/{name}.g0.xyz") as f:
+                            last, atoms, cmt = CartesianGeometry.from_xyz(
+                                f.read())
+                    last.randomize(std=shake_sigma)
+                    xyz = last.to_xyz(atoms, cmt=cmt)
+                    with open(f"{self.cwd}/{name}.g{i+1}.xyz") as f:
+                        last, atoms, cmt = CartesianGeometry.from_xyz(f.read())
+                else:
+                    break
+                finally:
+                    if i > 0:
+                        warn(
+                            f"molli.drivers.xtb: x{i+1} retrying optimization {name}"
+                        )
+
+                raise de
 
         if in_place:
             mol1 = mol

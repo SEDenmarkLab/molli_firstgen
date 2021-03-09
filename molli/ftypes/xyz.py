@@ -50,6 +50,7 @@ def parse_xyz(xyzblock: str, single: bool = True, assert_single: bool = False):
         Note that single will return the first block always.
         Even for multixyz files.
         If checks need to be performed, use assert_single
+        returns coord, atoms, comment
     """
     blocks = split_xyz(xyzblock)
 

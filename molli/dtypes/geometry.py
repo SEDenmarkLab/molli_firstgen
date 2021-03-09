@@ -2,7 +2,7 @@ import numpy as np
 import re
 from typing import *  # pylint: disable=unused-wildcard-import
 from copy import deepcopy
-
+from ..ftypes.xyz import parse_xyz
 # pylint: disable=no-member
 
 _HDR_PATTERN = re.compile(r"(?P<c>[0-9]+),(?P<r>[0-9]+)#(?P<g>.+)")
@@ -183,3 +183,37 @@ class CartesianGeometry:
         assert len(coord) == L, f"Expected {L} coords, found {len(coord)}"
 
         return cls(coord)
+
+    @classmethod
+    def from_xyz(cls, xyzs: str) -> (CartesianGeometry, List, str):
+        """
+            Parse an xyz list of lines
+            if multixyz, returns a list of all individual geometries
+        """
+        parsed = parse_xyz(xyzs, single=False, assert_single=False)
+
+        if len(parsed) == 1:
+            coord, atoms, cmt = parsed[0]
+            return cls(coord=coord), atoms, cmt
+
+        elif len(parsed) < 1:
+            raise SyntaxError
+
+        else:
+            res = []
+            for coord, atoms, cmt in parsed:
+                res.append((cls(coord=coord), atoms, cmt))
+            return res
+
+    def to_xyz(self, atoms: List, comment: str = None):
+        """
+            Create an xyz file string out of the geometry and atom list 
+        """
+        N = self.coord.shape[0]
+        assert N == len(atoms)
+
+        res = f"{N}\n{comment if comment else "Produced by molli"}\n"
+        for i, xyz in enumerate(self.coord):
+            x, y, z = xyz
+            res += f"{atoms[i]} {x:>10.4f} {y:>10.4f} {z:>10.4f}\n"
+        return res
