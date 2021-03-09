@@ -2,6 +2,7 @@
 **/*.mol2
 **/*.xyz
 **/*.zip
+.vscode/
 tests/
 documentation/
 notebooks/
