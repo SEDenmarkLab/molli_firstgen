@@ -10,7 +10,9 @@ from multiprocessing import Pool
 
 class MolCollection:
     """
-        This class provides convenience when handling molecule collections
+        This class provides convenience when handling molecule collections (zip files)
+        Performance of this class is limited by the time to load and parse massive objects
+        Therefore it is refactored a little bit
     """
     def __init__(self, name: str = "", molecules: List[Molecule] = []):
         self.name = name
@@ -140,3 +142,47 @@ class MolCollection:
                 Molecule.join_ap(m1, m2, ap1=ap1, ap2=ap2, dist=dist))
 
         return cls(name=f"{mc1.name}_{mc2.name}", molecules=molecules)
+
+
+class MolCollectionFile:
+    """
+        This context manager provides access to Molecule items from a collection 
+        when loading all of them in the memory is not an optimal strategy
+
+        Use this when you need to faster access to individual files rather than the entire collection
+        if save: upon exiting the molecule objects in the zip file will be updated
+
+    """
+    def __init__(self, fpath: str, save_on_exit: bool = False):
+        self.fpath = fpath
+        self._save_on_exit = save_on_exit
+        self._to_be_updated = []
+
+    def __enter__(self):
+        self.__collection: MolCollection = None
+        self.__fstream = ZipFile(self.fpath, "r")
+        self._meta = self.__fstream.read('__molli__')
+        return self
+
+    def __getitem__(self, item: str):
+        if hasattr(self,
+                   '__collection') and item in self.__collection.mol_index:
+            # if collection (a buffer for molecule objects) exists
+            return self.__collection[item]
+        if hasattr(self, '__fstream') and hasattr(self, '_meta'):
+            # ie if the file is open
+            # and the item was not located in the existing collection
+            pass
+        else:
+            raise IOError(
+                f"Unable to import a molecule {item}. Not found in buffer, and the file stream is closed."
+            )
+
+    def __exit__(self, *args):
+        self.__fstream.close()
+
+        if self._save_on_exit:
+            ...
+            # TODO: code that updates the molecules if
+
+        del self.__fstream

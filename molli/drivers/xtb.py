@@ -58,17 +58,44 @@ class XTBDriver(ExternalDriver):
             with open(f"{self.cwd}/{name}.c.inp", "wt") as f:
                 f.write(constraints)
 
-            self(
-                "xtb",
-                f"{name}.g0.xyz",
-                self.METHODS[method],
-                "--opt",
-                crit,
-                "--input",
-                f"{name}.c.inp",
-                "--namespace",
-                name,
-            )
+            for i in range(shake_attempt):
+                # xc = None
+                try:
+                    self(
+                        "xtb",
+                        f"{name}.g{i}.xyz",
+                        self.METHODS[method],
+                        "--opt",
+                        crit,
+                        "--input",
+                        f"{name}.c.inp",
+                        "--namespace",
+                        name,
+                    )
+                except DriverError as de:
+                    # This is where the code gets if the original optimization failed
+                    if os.path.isfile(f"{self.cwd}/{name}.xtbopt.log"):
+                        with open(f"{self.cwd}/{name}.xtbopt.log") as f:
+                            log_geoms = CartesianGeometry.from_xyz(f.read())
+                            last, atoms, cmt = log_geoms[-1]
+                    else:
+                        with open(f"{self.cwd}/{name}.g0.xyz") as f:
+                            last, atoms, cmt = CartesianGeometry.from_xyz(
+                                f.read())
+                    last.randomize(std=shake_sigma)
+                    xyz = last.to_xyz(atoms, cmt=cmt)
+                    with open(f"{self.cwd}/{name}.g{i+1}.xyz") as f:
+                        last, atoms, cmt = CartesianGeometry.from_xyz(f.read())
+                else:
+                    break
+                finally:
+                    if i > 0:
+                        warn(
+                            f"molli.drivers.xtb: x{i+1} retrying optimization {name}"
+                        )
+
+                raise de
+
         else:
             for i in range(shake_attempt):
                 # xc = None

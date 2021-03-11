@@ -14,7 +14,7 @@ setup(
         "molli",
     ],
     data_files=[],
-    version="0.1.0",
+    version="0.1.1",
     author="Alexander S. Shved",
     author_email="shvedalx@illinois.edu",
     install_requires=[
