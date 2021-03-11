@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 import re
 from typing import *  # pylint: disable=unused-wildcard-import
@@ -212,7 +213,7 @@ class CartesianGeometry:
         N = self.coord.shape[0]
         assert N == len(atoms)
 
-        res = f"{N}\n{comment if comment else "Produced by molli"}\n"
+        res = f"{N}\n{comment if comment else 'Produced by molli'}\n"
         for i, xyz in enumerate(self.coord):
             x, y, z = xyz
             res += f"{atoms[i]} {x:>10.4f} {y:>10.4f} {z:>10.4f}\n"
