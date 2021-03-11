@@ -194,6 +194,27 @@ class XTBDriver(ExternalDriver):
 
         return result
 
+    def autoopt(self, mol: Molecule, in_place: bool=False):
+        """
+            Minimalistic optimizer that is nearly guaranteed to do a proper job at preliminary optimization
+            May potentially misbehave for invertible stereogenic elements...
+        """
+        dists = []
+        for b in mol.bonds:
+            dists.append((b.a1, b.a2, 1.5))
+
+        constraints = self.gen_constraints(mol, fc=0.5, distances=dists)
+
+        m1 = self.minimize(mol,
+                           method='gfn-ff',
+                           crit="normal",
+                           in_place=in_place,
+                           constraints=constraints,
+                           shake_sigma=0.2,
+                           shake_attempt=10)
+        if m1:
+            return m1
+
     def fix_long_bonds(self,
                        mol: Molecule,
                        method: str = 'gfn-ff',
