@@ -14,13 +14,14 @@ class ExternalDriver:
     """
     JOB_ID = 0
 
-    def __init__(self, cwd: str = "/", encoding='utf8'):
+    def __init__(self, cwd: str = "/", nprocs=1, encoding='utf8'):
         """
             cwd: working directory from which the external program is called
         """
         # self.cmd = cmd
         self.cwd = cwd
         self.encoding = encoding
+        self.nprocs = nprocs
         if not os.path.isdir(cwd):
             os.makedirs(cwd)
 

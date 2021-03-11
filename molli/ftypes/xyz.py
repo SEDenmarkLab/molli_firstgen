@@ -65,4 +65,5 @@ def parse_xyz(xyzblock: str, single: bool = True, assert_single: bool = False):
         else:
             return parse_xyz_lines(blocks[0])
     else:
-        return [map(parse_xyz_lines, blocks)]
+        return list(map(parse_xyz_lines, blocks))
+
