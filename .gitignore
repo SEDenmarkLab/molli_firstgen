@@ -3,7 +3,4 @@
 **/*.xyz
 **/*.zip
 .vscode/
-tests/
-documentation/
-notebooks/
 molli.egg-info/

@@ -1,0 +1,20 @@
+body {
+    font-family: Roboto;
+    font-weight: 400;
+    font-size: 12px;
+}
+
+h1 {font-size: 18px; font-weight: 600; color: darkgreen; border-bottom: darkgreen 1.5px solid; margin-top: 2cm; margin-bottom: 1cm; page-break-before: always;}
+h2 {font-size: 16px; font-weight: 600; color: darkgreen; margin-top: 1cm; margin-bottom: 0.5cm;}
+h3 {font-size: 14px; font-weight: 600; color: darkgreen; margin-top: 0.5cm; margin-bottom: 0.1cm;}
+
+code {font-family: Roboto Mono;}
+
+p {text-align: justify;}
+
+p code {color: navy;}
+
+
+pre  {font-size: 10px; padding: 5px; margin-left: 0.5cm; margin-right: 0.5cm; border:teal 0.5px solid; background-color: rgb(245,250,245);}
+
+img {width: 100%;}
