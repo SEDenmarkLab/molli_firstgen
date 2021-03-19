@@ -3,4 +3,4 @@
 """
 from .geometry import CartesianGeometry
 from .molecule import Atom, Bond, Molecule
-from .collection import MolCollection
+from .collection import Collection, CollectionFile

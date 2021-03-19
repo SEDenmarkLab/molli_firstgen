@@ -8,7 +8,7 @@ from itertools import product, combinations_with_replacement
 from multiprocessing import Pool
 
 
-class MolCollection:
+class Collection:
     """
         This class provides convenience when handling molecule collections (zip files)
         Performance of this class is limited by the time to load and parse massive objects
@@ -97,6 +97,7 @@ class MolCollection:
                 meta['files'].append(f"{i+1}.xml")
 
             zf.writestr("__molli__", json.dumps(meta))
+    
 
     @classmethod
     def from_zip(cls, fpath: str):
@@ -125,8 +126,8 @@ class MolCollection:
 
     @classmethod
     def join(cls,
-             mc1: MolCollection,
-             mc2: MolCollection,
+             mc1: Collection,
+             mc2: Collection,
              ap1: str,
              ap2: str,
              dist: float = 10.0):
@@ -144,7 +145,7 @@ class MolCollection:
         return cls(name=f"{mc1.name}_{mc2.name}", molecules=molecules)
 
 
-class MolCollectionFile:
+class CollectionFile:
     """
         This context manager provides access to Molecule items from a collection 
         when loading all of them in the memory is not an optimal strategy
@@ -159,7 +160,7 @@ class MolCollectionFile:
         self._to_be_updated = []
 
     def __enter__(self):
-        self.__collection: MolCollection = None
+        self.__collection: Collection = None
         self.__fstream = ZipFile(self.fpath, "r")
         self._meta = self.__fstream.read('__molli__')
         return self

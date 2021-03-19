@@ -1,4 +1,4 @@
-from ..dtypes import Molecule, Atom, Bond, CartesianGeometry, MolCollection
+from ..dtypes import Molecule, Atom, Bond, CartesianGeometry, Collection
 from typing import List
 from xml.etree import cElementTree as et
 import os
@@ -15,7 +15,7 @@ def dist(a, b):
     return np.sqrt(np.sum((np.array(a) - np.array(b))**2))
 
 
-def split_cdxml(file_path: str) -> MolCollection:
+def split_cdxml(file_path: str) -> Collection:
     """
         Split a single cdxml file into a collection of molecules
     """
@@ -138,4 +138,4 @@ def split_cdxml(file_path: str) -> MolCollection:
 
         molecules.append(mol)
 
-    return MolCollection(name=name, molecules=molecules)
+    return Collection(name=name, molecules=molecules)
