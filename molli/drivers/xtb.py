@@ -9,6 +9,7 @@ from datetime import datetime
 from glob import glob
 from warnings import warn
 from typing import List, Callable
+from math import ceil
 
 
 class XTBDriver(ExternalDriver):
@@ -18,20 +19,6 @@ class XTBDriver(ExternalDriver):
     https://xtb-docs.readthedocs.io/en/latest/setup.html
     """
 
-    GFN1 = [
-        "gfn1",
-        "gfn1-xtb",
-    ]  # GFN 1 parameterization equivalents
-
-    GFN2 = [
-        "gfn2",
-        "gfn2-xtb",
-    ]  # GFN 2 parameterization equivalents
-
-    GFNF = ["gff", "gfn-ff"]  # GFN Force  parameterization
-
-    METHODS = GFN1 + GFN2 + GFNF
-
     PREFIX = "mx"
     JOB_ID = 0
 
@@ -39,13 +26,11 @@ class XTBDriver(ExternalDriver):
         self,
         cwd: str = "/temp_xtb/",
         nprocs: int = 1,
-        method: str = "gfn2-xtb",
+        method: str = "gfn2",
         accuracy: float = 1.0,
         opt_maxiter: int = 100,
         opt_crit: str = "normal",  # crude, sloppy, normal, tight, vtight
     ):
-        assert method in self.__class__.METHODS
-
         super().__init__(cwd=cwd, nprocs=nprocs)
 
         self.method = method
@@ -53,166 +38,9 @@ class XTBDriver(ExternalDriver):
         self.opt_maxiter = opt_maxiter
         self.opt_crit = opt_crit
 
-        # if method in self.__class__.GFN1:
-        #     self.method = "gfn1"
-        # elif method in self.__class__.GFN2:
-        #     self.method = "gfn2"
-        # elif method in self.__class__.GFNF:
-        #     self.method = "gfnf"
-
-    def _attempt_opt(
-        self,
-        mol: Molecule,
-        method: str = "gfn-ff",
-        crit: str = "normal",
-        maxiter: int = 200,
-        in_place: bool = False,
-        xtbinp: str = "",
-    ):
-        """
-        Attempt a geometry optimization with specified parameters
-        """
-        cmd = []  # collection of command line arguments for xtb binary
-
-    def minimize(
-        self,
-        mol: Molecule,
-        method: str = "gfn-ff",
-        crit: str = "normal",
-        maxiter: int = 200,
-        in_place: bool = False,
-        constraints: str = "",
-        shake_sigma=0.05,
-        shake_attempt=5,
-    ):
-        """
-        Perform energy minimization
-        WARNING: BONDING TABLE IS NOT GOING TO BE UPDATED!
-        Warning: make sure that the bond lengths are physically sound.
-                    alternatively, use the fix_long_bonds routine
-        GFN family of methods does not fix unphysical geometries (without constraints).
-
-        if in_place == True: modify the input molecule
-
-        shake: in a situation where the termination of xtb optimization is abnormal,
-        it is useful to shake the geometry a bit, and then reoptimize.
-        sigma: standard deviation in Angstroem
-        attempts: how many attempts before raising an exception
-        """
-        assert method in self.METHODS
-
-        jobid = self.__class__.JOB_ID
-
-        xyz = mol.to_xyz()
-        name = f"{self.PREFIX}.{os.getpid()}.{jobid:0>3}.minimize"  # pid for multiprocessing safety
-        with open(f"{self.cwd}/{name}.g0.xyz", "wt") as f:
-            f.write(xyz)
-
-        if constraints:
-            with open(f"{self.cwd}/{name}.c.inp", "wt") as f:
-                f.write(constraints)
-
-            err = None
-            for i in range(shake_attempt):
-                # xc = None
-                try:
-                    self(
-                        "xtb",
-                        f"{name}.g{i}.xyz",
-                        self.METHODS[method],
-                        "--opt",
-                        crit,
-                        "--input",
-                        f"{name}.c.inp",
-                        "--namespace",
-                        name,
-                    )
-                except DriverError as de:
-                    err = de
-                    # This is where the code gets if the original optimization failed
-                    with open(f"{self.cwd}/{name}.g0.xyz") as f:
-                        last, atoms, cmt = CartesianGeometry.from_xyz(f.read())
-
-                    if os.path.isfile(f"{self.cwd}/{name}.xtbopt.log"):
-                        with open(f"{self.cwd}/{name}.xtbopt.log") as f:
-                            try:
-                                log_geoms = CartesianGeometry.from_xyz(f.read())
-                                last, atoms, cmt = log_geoms[-1]
-                            except:
-                                pass
-
-                    last.randomize(std=shake_sigma)
-                    xyz = last.to_xyz(atoms, cmt)
-                    with open(f"{self.cwd}/{name}.g{i+1}.xyz", "wt") as f:
-                        f.write(xyz)
-                else:
-                    break
-                finally:
-                    if i > 0:
-                        print(f"molli.drivers.xtb: x{i+1} retrying optimization {name}")
-
-            if isinstance(err, Exception):
-                raise err
-
-        else:
-            err = None
-            for i in range(shake_attempt):
-                # xc = None
-                try:
-                    self(
-                        "xtb",
-                        f"{name}.g{i}.xyz",
-                        self.METHODS[method],
-                        "--opt",
-                        crit,
-                        "--cycles",
-                        maxiter,
-                        "--namespace",
-                        name,
-                    )
-                except DriverError as de:
-                    err = de
-                    # This is where the code gets if the original optimization failed
-                    with open(f"{self.cwd}/{name}.g0.xyz") as f:
-                        last, atoms, cmt = CartesianGeometry.from_xyz(f.read())
-
-                    if os.path.isfile(f"{self.cwd}/{name}.xtbopt.log"):
-                        with open(f"{self.cwd}/{name}.xtbopt.log") as f:
-                            try:
-                                log_geoms = CartesianGeometry.from_xyz(f.read())
-                                last, atoms, cmt = log_geoms[-1]
-                            except:
-                                pass
-                    last.randomize(std=shake_sigma)
-                    xyz = last.to_xyz(atoms, cmt)
-                    with open(f"{self.cwd}/{name}.g{i+1}.xyz", "wt") as f:
-                        f.write(xyz)
-                else:
-                    break
-                finally:
-
-                    if i > 0:
-                        warn(f"molli.drivers.xtb: x{i+1} retrying optimization {name}")
-
-            if isinstance(err, Exception):
-                raise err
-
-        if in_place:
-            mol1 = mol
-        else:
-            mol1 = deepcopy(mol)
-
-        with open(f"{self.cwd}/{name}.xtbopt.xyz") as f:
-            nxyz = f.read()
-            if not in_place:
-                mol1.update_geom_from_xyz(nxyz, assert_single=True)
-            else:
-                mol.update_geom_from_xyz(nxyz, assert_single=True)
-
-        self.cleanup(regex=f"{name}.*")
-
-        if not in_place:
-            return mol1
+    def __call__(self, *args):
+        print("xtb", *args, "-P", self.nprocs)
+        super().__call__("xtb", *args, "-P", self.nprocs)
 
     def gen_constraints(
         self,
@@ -264,62 +92,97 @@ class XTBDriver(ExternalDriver):
 
         return result
 
-    def autoopt(self, mol: Molecule, in_place: bool = False):
+    def optimize(
+        self,
+        mol: Molecule,
+        crit: str = None,  # overrides criterion in the method, if not none
+        in_place: bool = False,
+        xtbinp: str = "",
+        fn_suffix=0,
+    ):
         """
-        Minimalistic optimizer that is nearly guaranteed to do a proper job at preliminary optimization
-        May potentially misbehave for invertible stereogenic elements...
+        Attempt a geometry optimization with parameters from the instance.
+
         """
-        dists = []
-        for b in mol.bonds:
-            dists.append((b.a1, b.a2, 1.5))
+        cmd = []  # collection of command line arguments for xtb binary
+        jobid = self.__class__.JOB_ID
+        name = f"{self.PREFIX}.opt.{os.getpid()}.{jobid}.{fn_suffix}"
+        with open(f"{self.cwd}/{name}.xyz", "wt") as xyzf:
+            xyzf.write(mol.to_xyz())
 
-        constraints = self.gen_constraints(mol, fc=0.5, distances=dists)
+        if crit != None:
+            _crit = crit
+        else:
+            _crit = self.opt_crit
 
-        m1 = self.minimize(
-            mol,
-            method="gfn-ff",
-            crit="normal",
-            in_place=in_place,
-            constraints=constraints,
-            shake_sigma=0.2,
-            shake_attempt=10,
+        cmd.extend(
+            (
+                f"{name}.xyz",
+                self.method,
+                "--opt",
+                _crit,
+                "--cycles",
+                self.opt_maxiter,
+                "--acc",
+                self.accuracy,
+                "--namespace",
+                name,
+            )
         )
-        if m1:
-            return m1
+
+        if xtbinp:
+            with open(f"{self.cwd}/{name}.inp", "wt") as inpf:
+                inpf.write(xtbinp)
+
+            cmd.extend(("--input", f"{name}.inp"))
+
+        self(*cmd)
+
+        with open(f"{self.cwd}/{name}.xtbopt.xyz") as f:
+            nxyz = f.read()
+            if not in_place:
+                mol1 = deepcopy(mol)
+                mol1.update_geom_from_xyz(nxyz, assert_single=True)
+                return mol1
+            else:
+                mol.update_geom_from_xyz(nxyz, assert_single=True)
 
     def fix_long_bonds(
         self,
         mol: Molecule,
-        method: str = "gfn-ff",
-        lthresh: float = 5.0,
-        target: float = 1.5,
-        fc: float = 0.5,
-        nsteps: int = 30,
-        in_place: bool = True,
+        rss_length_thresh: float = 3.0,
+        rss_steps: float = 20,
+        force_const: float = 0.05,
+        target_len: float = 1.75,
+        in_place: bool = False,
+        fn_suffix: str = 0,
     ):
         """
-        Detects long bonds by lower length threshold (artifacts of molecule joining) and
-        performs a concerted relaxed surface scan to bring those fragments together.
-        Geometry
+        Fix all long bonds in the molecule by doing a relaxed surface scan with coordinates constrained
         """
-
-        dists = []
-        scans = []
-
+        tbf = {}  # to be fixed
         for b in mol.bonds:
-            l = mol.get_bond_length(b)
-            if l >= lthresh:
-                dists.append((b.a1, b.a2, l))
-                scans.append((len(dists), l, target, nsteps))
+            if b not in tbf and mol.get_bond_length(b) >= rss_length_thresh:
+                tbf[b] = mol.get_bond_length(b)
 
-        constr = self.gen_constraints(mol, distances=dists, scans=scans)
+        if not tbf:
+            return mol
+        inp = f"$constrain\n  force constant={force_const}\n"
 
-        m1 = self.minimize(
-            mol, method=method, crit="sloppy", in_place=in_place, constraints=constr
-        )
+        for b in tbf:
 
-        if m1:
-            return m1
+            a1, a2 = mol.get_atom_idx(b.a1), mol.get_atom_idx(b.a2)
+            inp += f"  distance: {a1+1}, {a2+1}, {tbf[b]:0.6f}\n"
+
+        inp += "$scan\n  mode=concerted\n"
+        for i, b in enumerate(tbf):
+            inp += f"  {i+1}: {tbf[b]}, {target_len}, {rss_steps}\n"
+
+        inp += "$end\n"
+
+        m1 = self.optimize(mol, crit="sloppy", in_place=False, xtbinp=inp, fn_suffix=0)
+
+        return m1
 
 
 class CRESTDriver(ExternalDriver):

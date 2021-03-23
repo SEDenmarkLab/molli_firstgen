@@ -3,6 +3,7 @@ from .geometry import CartesianGeometry, rotation_matrix
 from typing import List, Dict, Union, Any, Callable, overload
 import os
 import json
+
 # from ..parsing.mol2 import get_mol2_block_lines
 from copy import deepcopy
 import numpy as np
@@ -14,15 +15,15 @@ from io import IOBase
 
 def yield_mol2_block_lines(title, text):
     """
-        Yield lines delimited by @TRIPOS<some_name> [...] 
+    Yield lines delimited by @TRIPOS<some_name> [...]
     """
 
     lines = [x.strip() for x in str(text).splitlines()]
 
     s = lines.index("@<TRIPOS>{}".format(str(title).strip().upper()))
 
-    for l in lines[s + 1:]:
-        if l and l[0] == '@':
+    for l in lines[s + 1 :]:
+        if l and l[0] == "@":
             break
         else:
             yield l
@@ -37,14 +38,17 @@ class Atom:
     Symbol, label, atom type.
 
     ! Additional treatment of stereogenicity.
-      
+
     """
-    def __init__(self,
-                 symbol: str,
-                 label: str,
-                 atom_type: str = "C",
-                 stereo: str = "U",
-                 ap: bool = False):
+
+    def __init__(
+        self,
+        symbol: str,
+        label: str,
+        atom_type: str = "C",
+        stereo: str = "U",
+        ap: bool = False,
+    ):
 
         self.label = str(label)
         self.symbol = str(symbol)
@@ -61,8 +65,9 @@ class Atom:
 
 class Bond:
     """
-        Chemical bond
+    Chemical bond
     """
+
     def __init__(self, a1: Atom, a2: Atom, bond_type: str = None):
         self.a1 = a1
         self.a2 = a2
@@ -84,11 +89,37 @@ class Bond:
         return f"Bond ({self.bond_type}) {self.a1}-{self.a2}"
 
 
+def structure_clone(atoms: List[Atom], bonds: List[Bond]) -> (List[Atom], List[Bond]):
+    """
+    This functions allows deep copying of atoms and bonds, keeping the connectivity table intact
+    Bonds are not kept if their atoms are not in the list!
+    """
+
+    old_new_map = {}
+    new_atoms = []
+    new_bonds = []
+
+    for a in atoms:
+        _a = deepcopy(a)
+        old_new_map[a] = _a
+        new_atoms.append(_a)
+
+    for b in bonds:
+        if b.a1 in old_new_map and b.a2 in old_new_map:
+            _a1 = old_new_map[b.a1]
+            _a2 = old_new_map[b.a2]
+
+            new_bonds.append(Bond(_a1, _a2, b.bond_type))
+
+    return new_atoms, new_bonds, old_new_map
+
+
 class Molecule:
     """
     Molecule is a class that is supposed to be a cornerstone in all cross-talk between different pieces of code.
     XML-serializable.
     """
+
     def __init__(
         self,
         name: str,
@@ -96,21 +127,19 @@ class Molecule:
         bonds: List[Bond],
         geom: CartesianGeometry,
         conformers: List[CartesianGeometry] = [],
+        clone: bool = True,
     ):
-        """
-        
-        """
+        """"""
         self.name = name
-        self.atoms = atoms
-        self.bonds = bonds
+        self.atoms, self.bonds = atoms, bonds
         self.geom = geom
         self.conformers = conformers
 
     def __contains__(self, x):
         if isinstance(x, Atom):
-            return (x in self.atoms)
+            return x in self.atoms
         if isinstance(x, Bond):
-            return (x in self.bonds)
+            return x in self.bonds
 
     @classmethod
     def from_mol2(cls, mol2s: str | IOBase, name: str = None):
@@ -155,14 +184,12 @@ class Molecule:
             a1, a2, bt = int(ls[1]) - 1, int(ls[2]) - 1, ls[3]
             _bonds.append(Bond(_atoms[a1], _atoms[a2], bond_type=bt))
 
-        return cls(name=_name,
-                   atoms=_atoms,
-                   bonds=_bonds,
-                   geom=CartesianGeometry(_geom))
+        return cls(
+            name=_name, atoms=_atoms, bonds=_bonds, geom=CartesianGeometry(_geom)
+        )
 
     def has_confomers(self):
-        """
-        """
+        """"""
         return True if self.conformers else False
 
     def get_atom(self, label: Atom | str):
@@ -179,9 +206,9 @@ class Molecule:
 
         raise IndexError(f"Cannot find {label}")
 
-    def add_bond(self, a1: Atom, a2: Atom, bond_type: str = '1'):
+    def add_bond(self, a1: Atom, a2: Atom, bond_type: str = "1"):
         """
-            Create an additional bond
+        Create an additional bond
         """
         self.bonds.append(Bond(a1, a2, bond_type=bond_type))
 
@@ -215,23 +242,22 @@ class Molecule:
 
     def update_geom_from_xyz(self, xyzblock: str, assert_single=False):
         """
-            Update geometry from an xyz block.
-            Assert single ensures that the xyz block is a single-molecule xyz file
+        Update geometry from an xyz block.
+        Assert single ensures that the xyz block is a single-molecule xyz file
         """
 
-        coord, atoms, _ = parse_xyz(xyzblock,
-                                    single=True,
-                                    assert_single=assert_single)
+        coord, atoms, _ = parse_xyz(xyzblock, single=True, assert_single=assert_single)
 
         if atoms == [x.symbol for x in self.atoms]:
             self.geom.coord = coord
         else:
             raise ValueError(
-                "The xyz file signature does not match the current atom list.")
+                "The xyz file signature does not match the current atom list."
+            )
 
     def to_xyz(self):
         """
-            Return a .xyz block
+        Return a .xyz block
         """
         N = len(self.atoms)
         res = f"{N}\n{self.name}\n"
@@ -244,14 +270,12 @@ class Molecule:
         i1, i2 = self.atoms.index(b.a1), self.atoms.index(b.a2)
         return self.geom.get_distance(i1, i2)
 
-    def fix_geom(self,
-                 s1: str = "C",
-                 s2: str = "C",
-                 dist: float = 1.5,
-                 center: bool = True):
+    def fix_geom(
+        self, s1: str = "C", s2: str = "C", dist: float = 1.5, center: bool = True
+    ):
         """
-            Rescale geometry so that the average length of bonds with selected labels is equal to dist.
-            Also, translate the geometry to the geometric center if center == True 
+        Rescale geometry so that the average length of bonds with selected labels is equal to dist.
+        Also, translate the geometry to the geometric center if center == True
         """
         dists = []
         for b in self.bonds:
@@ -271,7 +295,7 @@ class Molecule:
 
     def to_mol2(self):
         """
-            Return a .mol2 block
+        Return a .mol2 block
         """
         mol2 = f"@<TRIPOS>MOLECULE\n{self.name}\n{len(self.atoms)} {len(self.bonds)} 0 0 0\nSMALL\nGASTEIGER\n\n"
 
@@ -290,21 +314,23 @@ class Molecule:
         return mol2
 
     @classmethod
-    def join(cls,
-             m1: Molecule,
-             m2: Molecule,
-             a11: Atom,
-             a12: Atom,
-             a21: Atom,
-             a22: Atom,
-             dist: float = 10.0):
+    def join(
+        cls,
+        m1: Molecule,
+        m2: Molecule,
+        a11: Atom,
+        a12: Atom,
+        a21: Atom,
+        a22: Atom,
+        dist: float = 10.0,
+    ):
         """
-            Join two molecular fragments with bond a11--a21, delete atoms a21 and a22
+        Join two molecular fragments with bond a11--a21, delete atoms a21 and a22
         """
+
         if m1.has_confomers() or m2.has_confomers():
             # TODO: implement conformer joining, because that could be pretty powerful
-            raise NotImplementedError(
-                "Currently conformer joining is not supported")
+            raise NotImplementedError("Currently conformer joining is not supported")
 
         ## Pre-flight checks
         if not len(_bm1 := m1.get_bonds_with_atom(a12)) == 1:
@@ -352,32 +378,34 @@ class Molecule:
         atoms = []
         bonds = []
 
-        for a in (m1.atoms + m2.atoms):
-            if not a in (a12, a22):
+        m1_atoms, m1_bonds, m1_map = structure_clone(m1.atoms, m1.bonds)
+        m2_atoms, m2_bonds, m2_map = structure_clone(m2.atoms, m2.bonds)
+
+        for a in m1_atoms + m2_atoms:
+            if not a in (m1_map[a12], m2_map[a22]):
                 atoms.append(a)
 
-        for b in (m1.bonds + m2.bonds):
-            if (a22 not in b) and (a12 not in b):
+        for b in m1_bonds + m2_bonds:
+            if (m2_map[a22] not in b) and (m1_map[a12] not in b):
                 bonds.append(b)
 
         geom = np.concatenate((g1.coord, g2.coord), axis=0)
 
-        result = cls(name=name,
-                     atoms=atoms,
-                     bonds=bonds,
-                     geom=CartesianGeometry(geom))
-        result.add_bond(a11, a21)
+        result = cls(name=name, atoms=atoms, bonds=bonds, geom=CartesianGeometry(geom))
+        result.add_bond(m1_map[a11], m2_map[a21])
         # result.relabel_atoms()
 
         return result
 
     @classmethod
-    def join_ap(cls,
-                m1: Molecule,
-                m2: Molecule,
-                ap1: str = 'A0',
-                ap2: str = 'A1',
-                dist: float = 10.0):
+    def join_ap(
+        cls,
+        m1: Molecule,
+        m2: Molecule,
+        ap1: str = "A0",
+        ap2: str = "A1",
+        dist: float = 10.0,
+    ):
         """
         Join two molecules at the attachment points. Attachment points are defined as atoms with distinct labels, such as A0.
         """
@@ -388,8 +416,12 @@ class Molecule:
         bonds1 = m1.get_bonds_with_atom(a12)
         bonds2 = m2.get_bonds_with_atom(a22)
 
-        assert len(bonds1) == 1
-        assert len(bonds2) == 1
+        assert (
+            len(bonds1) == 1
+        ), f"Doesn't look like ap1 is an attachment point: {len(bonds1)} bonds"
+        assert (
+            len(bonds2) == 1
+        ), f"Doesn't look like ap2 is an attachment point: {len(bonds2)} bonds"
 
         b1 = bonds1[0]
         b2 = bonds2[0]
@@ -401,13 +433,12 @@ class Molecule:
 
     def to_xml(self, pretty=True):
         """
-            Save the molecule object in an xml format
+        Save the molecule object in an xml format
         """
 
         xdoc = xmd.Document()
 
-        xdoc.appendChild(
-            xdoc.createComment("MOLLI PACKAGE EXPERIMENTAL XML FORMAT"))
+        xdoc.appendChild(xdoc.createComment("MOLLI PACKAGE EXPERIMENTAL XML FORMAT"))
 
         xmol = xdoc.createElement("molecule")
         xmol.setAttribute("name", self.name)
@@ -455,7 +486,7 @@ class Molecule:
     @classmethod
     def from_xml(cls, fp: str) -> Molecule:
         """
-            Parse a molli xml file and create a Molecule instance
+        Parse a molli xml file and create a Molecule instance
         """
         et = xparse(fp)
         # rt = et.getroot()
@@ -475,8 +506,7 @@ class Molecule:
         conformers = []
 
         for a in xatoms:
-            aid, s, l, at = a.attrib["id"], a.attrib["s"], \
-                a.attrib["l"], a.attrib["t"]
+            aid, s, l, at = a.attrib["id"], a.attrib["s"], a.attrib["l"], a.attrib["t"]
             ids.append(aid)
             atoms.append(Atom(s, l, at))
 
@@ -488,11 +518,7 @@ class Molecule:
         geom = CartesianGeometry.from_str(xgeom.text)
         conformers = [CartesianGeometry.from_str(g.text) for g in xconfs]
 
-        return cls(name,
-                   atoms=atoms,
-                   bonds=bonds,
-                   geom=geom,
-                   conformers=conformers)
+        return cls(name, atoms=atoms, bonds=bonds, geom=geom, conformers=conformers)
 
     @classmethod
     def from_file(cls, fref: str | IOBase):
@@ -506,7 +532,7 @@ class Molecule:
         if ext not in ["mol2", "xml"]:
             raise ValueError("Unknown file extension")
 
-        if ext == 'mol2':
+        if ext == "mol2":
             return cls.from_mol2(fref)
-        if ext == 'xml':
+        if ext == "xml":
             return cls.from_xml(fref)

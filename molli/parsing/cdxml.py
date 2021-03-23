@@ -12,15 +12,15 @@ def parse_pos(p: str):
 
 
 def dist(a, b):
-    return np.sqrt(np.sum((np.array(a) - np.array(b))**2))
+    return np.sqrt(np.sum((np.array(a) - np.array(b)) ** 2))
 
 
 def split_cdxml(file_path: str) -> Collection:
     """
-        Split a single cdxml file into a collection of molecules
+    Split a single cdxml file into a collection of molecules
     """
 
-    name = os.path.basename(file_path)
+    name = os.path.basename(file_path).rsplit(".")[0]
 
     with open(file_path) as f:
         xml = et.parse(f)
@@ -123,17 +123,13 @@ def split_cdxml(file_path: str) -> Collection:
                     geom[f1][2] = -ZSC * zu
                     geom[f2][2] = -ZSC * zu
 
-            bond = Bond(atoms[atom_ids.index(id1)], atoms[atom_ids.index(id2)],
-                        bt)
+            bond = Bond(atoms[atom_ids.index(id1)], atoms[atom_ids.index(id2)], bt)
             bonds.append(bond)
 
         closest = np.argmin([dist(frag_centroid, x) for x in label_coord])
-        name = labels[closest]
+        mol_name = labels[closest]
 
-        mol = Molecule(name,
-                       atoms=atoms,
-                       bonds=bonds,
-                       geom=CartesianGeometry(geom))
+        mol = Molecule(mol_name, atoms=atoms, bonds=bonds, geom=CartesianGeometry(geom))
         mol.fix_geom()
 
         molecules.append(mol)
