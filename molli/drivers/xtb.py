@@ -39,7 +39,7 @@ class XTBDriver(ExternalDriver):
         self.opt_crit = opt_crit
 
     def __call__(self, *args):
-        print("xtb", *args, "-P", self.nprocs)
+        # print("xtb", *args, "-P", self.nprocs)
         super().__call__("xtb", *args, "-P", self.nprocs)
 
     def gen_constraints(

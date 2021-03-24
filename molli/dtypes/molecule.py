@@ -1,6 +1,6 @@
 from __future__ import annotations
 from .geometry import CartesianGeometry, rotation_matrix
-from typing import List, Dict, Union, Any, Callable, overload
+from typing import List, Dict, Union, Set, Any, Callable, overload
 import os
 import json
 
@@ -57,6 +57,9 @@ class Atom:
         self.ap = ap  # Maybe use in the future?
 
     def __str__(self):
+        return f"{self.label}"
+
+    def __repr__(self):
         return f"{self.label}"
 
     def set_attachment_point(self, v: bool = True):
@@ -204,7 +207,7 @@ class Molecule:
             if a.label == label:
                 return self.atoms.index(a)
 
-        raise IndexError(f"Cannot find {label}")
+        raise IndexError(f"Cannot find {label} in {self.name}")
 
     def add_bond(self, a1: Atom, a2: Atom, bond_type: str = "1"):
         """
@@ -239,6 +242,29 @@ class Molecule:
 
         valence = sum(orders)
         return valence
+
+    def get_connected_atoms(self, a: Atom | str) -> Set[Atom]:
+        """
+        Return a `set` of atoms connected to a given atom
+        """
+        _a = self.get_atom(a)
+
+        atoms = set()
+        for b in self.get_bonds_with_atom(_a):
+            atoms.add(b.a1 if b.a2 == _a else b.a2)
+
+        return atoms
+
+    def get_subgeom(self, atoms: List[Atom]):
+        """
+        Return a subset of atomic position
+        """
+        subgeom = []
+        for a in atoms:
+            c = self.geom.get_coord(self.get_atom_idx(a))
+            subgeom.append(c)
+
+        return CartesianGeometry(subgeom)
 
     def update_geom_from_xyz(self, xyzblock: str, assert_single=False):
         """

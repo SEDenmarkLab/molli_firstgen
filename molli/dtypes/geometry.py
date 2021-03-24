@@ -4,6 +4,7 @@ import re
 from typing import *  # pylint: disable=unused-wildcard-import
 from copy import deepcopy
 from ..ftypes.xyz import parse_xyz
+
 # pylint: disable=no-member
 
 _HDR_PATTERN = re.compile(r"(?P<c>[0-9]+),(?P<r>[0-9]+)#(?P<g>.+)")
@@ -47,10 +48,10 @@ def rotation_matrix(v1, v2, tol=1.0e-6):
 
 def distance(p1, p2):
     """
-        Returns Euclidean distance between two points
+    Returns Euclidean distance between two points
     """
     _p1, _p2 = np.array(p1), np.array(p2)
-    return np.sqrt(np.sum((_p1 - _p2)**2))
+    return np.sqrt(np.sum((_p1 - _p2) ** 2))
 
 
 class CartesianGeometry:
@@ -61,12 +62,14 @@ class CartesianGeometry:
 
     *This class does not handle atom types.*
     """
+
     def __init__(
-            self,
-            coord: np.ndarray = None,
-            precision=4,  # decimal places for geometry printouts
-            unit="Angstrom",
-            dtype=np.float32):
+        self,
+        coord: np.ndarray = None,
+        precision=4,  # decimal places for geometry printouts
+        unit="Angstrom",
+        dtype=np.float32,
+    ):
         """
         Docstring
         """
@@ -84,14 +87,14 @@ class CartesianGeometry:
         """
         Centers the molecule on it's geometrical center
         """
-        centroid = np.average(self.coord, axis=(0, ))
+        centroid = np.average(self.coord, axis=(0,))
         self.translate(-1 * centroid)
 
     def translate(self, vector: np.ndarray):
         """
         Translate the molecule by a given vector
         """
-        assert vector.shape == (3, )
+        assert vector.shape == (3,)
         for c in self.coord:
             c += vector
 
@@ -139,16 +142,19 @@ class CartesianGeometry:
 
     def get_distance(self, idx1: int, idx2: int):
         """
-            Measure the Euclidean distance between two points
+        Measure the Euclidean distance between two points
         """
         p1 = self.coord[idx1]
         p2 = self.coord[idx2]
 
         return distance(p1, p2)
 
+    def get_coord(self, idx: int):
+        return self.coord[idx]
+
     def dumps(self):
         """
-            Encode the geometry as string
+        Encode the geometry as string
         """
         gs = f"#{self.N},3:"
 
@@ -161,7 +167,7 @@ class CartesianGeometry:
     @classmethod
     def from_str(cls, s: str, u: str = "A"):
         """
-            Decode geometry string
+        Decode geometry string
         """
 
         if u != "A":
@@ -188,8 +194,8 @@ class CartesianGeometry:
     @classmethod
     def from_xyz(cls, xyzs: str) -> (CartesianGeometry, List, str):
         """
-            Parse an xyz list of lines
-            if multixyz, returns a list of all individual geometries
+        Parse an xyz list of lines
+        if multixyz, returns a list of all individual geometries
         """
         parsed = parse_xyz(xyzs, single=False, assert_single=False)
 
@@ -208,7 +214,7 @@ class CartesianGeometry:
 
     def to_xyz(self, atoms: List, comment: str = None):
         """
-            Create an xyz file string out of the geometry and atom list 
+        Create an xyz file string out of the geometry and atom list
         """
         N = self.coord.shape[0]
         assert N == len(atoms)

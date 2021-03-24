@@ -26,7 +26,7 @@ class Collection:
     def __iter__(self):
         return iter(self.molecules)
 
-    def __getitem__(self, item):
+    def __getitem__(self, item) -> Molecule:
         if isinstance(item, int):
             return self.molecules[item]
         elif isinstance(item, str):
