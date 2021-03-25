@@ -106,7 +106,7 @@ class XTBDriver(ExternalDriver):
         """
         cmd = []  # collection of command line arguments for xtb binary
         jobid = self.__class__.JOB_ID
-        name = f"{self.PREFIX}.opt.{os.getpid()}.{jobid}.{fn_suffix}"
+        name = f"{self.PREFIX}.opt.{jobid}.{fn_suffix}"
         with open(f"{self.cwd}/{name}.xyz", "wt") as xyzf:
             xyzf.write(mol.to_xyz())
 
@@ -117,14 +117,14 @@ class XTBDriver(ExternalDriver):
 
         cmd.extend(
             (
-                f"{name}.xyz",
                 self.method,
+                f"{name}.xyz",
                 "--opt",
                 _crit,
                 "--cycles",
                 self.opt_maxiter,
-                "--acc",
-                self.accuracy,
+                # "--acc",
+                # self.accuracy,
                 "--namespace",
                 name,
             )
@@ -140,20 +140,25 @@ class XTBDriver(ExternalDriver):
 
         with open(f"{self.cwd}/{name}.xtbopt.xyz") as f:
             nxyz = f.read()
-            if not in_place:
-                mol1 = deepcopy(mol)
-                mol1.update_geom_from_xyz(nxyz, assert_single=True)
-                return mol1
-            else:
-                mol.update_geom_from_xyz(nxyz, assert_single=True)
+
+        # self.cleanup(f"*{name}*")
+
+        if not in_place:
+            mol1 = deepcopy(mol)
+            mol1.update_geom_from_xyz(nxyz, assert_single=True)
+            return mol1
+        else:
+            mol.update_geom_from_xyz(nxyz, assert_single=True)
+
 
     def fix_long_bonds(
         self,
         mol: Molecule,
-        rss_length_thresh: float = 3.0,
-        rss_steps: float = 20,
-        force_const: float = 0.05,
-        target_len: float = 1.75,
+        rss_length_thresh: float = 4.0,
+        rss_steps: float = 15,
+        rss_maxcycle: int = 20,
+        force_const: float = 0.5,
+        target_len: float = 1.5,
         in_place: bool = False,
         fn_suffix: str = 0,
     ):
@@ -170,17 +175,24 @@ class XTBDriver(ExternalDriver):
         inp = f"$constrain\n  force constant={force_const}\n"
 
         for b in tbf:
-
             a1, a2 = mol.get_atom_idx(b.a1), mol.get_atom_idx(b.a2)
-            inp += f"  distance: {a1+1}, {a2+1}, {tbf[b]:0.6f}\n"
+            inp += f"  distance: {a1+1}, {a2+1}, {tbf[b]:0.4f}\n"
+
+        #generate constraints for C-H bonds
+        for b in mol.bonds:
+            if (b.a1.symbol in "CHFO" and b.a2.symbol in "CHFO") or \
+                (b.a1.symbol == "Cl" or b.a2.symbol == "Cl"):
+                a1, a2 = mol.get_atom_idx(b.a1), mol.get_atom_idx(b.a2)
+                inp += f"  distance: {a1+1}, {a2+1}, {mol.get_bond_length(b):0.4f}\n"
 
         inp += "$scan\n  mode=concerted\n"
         for i, b in enumerate(tbf):
-            inp += f"  {i+1}: {tbf[b]}, {target_len}, {rss_steps}\n"
+            inp += f"  {i+1}: {tbf[b]:0.4f}, {target_len:0.4f}, {rss_steps}\n"
 
+        inp += f"$opt\n  maxcycle={rss_maxcycle}\n"
         inp += "$end\n"
 
-        m1 = self.optimize(mol, crit="sloppy", in_place=False, xtbinp=inp, fn_suffix=0)
+        m1 = self.optimize(mol, crit="crude", in_place=False, xtbinp=inp, fn_suffix=0)
 
         return m1
 

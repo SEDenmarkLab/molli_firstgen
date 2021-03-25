@@ -14,16 +14,16 @@ class ExternalDriver:
     """
     JOB_ID = 0
 
-    def __init__(self, cwd: str = "/", nprocs=1, encoding='utf8'):
+    def __init__(self, cwd: str = "", nprocs=1, encoding='utf8'):
         """
             cwd: working directory from which the external program is called
         """
         # self.cmd = cmd
-        self.cwd = cwd
+        self.cwd = os.path.normpath(os.path.join(cwd, str(os.getpid())))
         self.encoding = encoding
         self.nprocs = nprocs
-        if not os.path.isdir(cwd):
-            os.makedirs(cwd)
+        if not os.path.isdir(self.cwd):
+            os.makedirs(self.cwd)
 
     def __call__(self, *args, inp: str = None):
         """
@@ -57,9 +57,7 @@ class ExternalDriver:
         """
             Clean up the working directory
         """
-        file_candidates = \
-            glob(f"{self.cwd}/{regex}") + \
-            glob(f"{self.cwd}/.{regex}")
+        file_candidates = glob(f"{self.cwd}/{regex}")
 
         for fc in file_candidates:
             if os.path.isfile(fc):
