@@ -4,3 +4,4 @@
 **/*.zip
 .vscode/
 molli.egg-info/
+**/__pycache__
