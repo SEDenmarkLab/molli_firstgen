@@ -3,7 +3,7 @@
 """
 import os
 from ._core import ExternalDriver, DriverError
-from ..dtypes import Molecule, CartesianGeometry, Atom, Bond
+from ..dtypes import Atom, Bond, Molecule, CartesianGeometry
 from copy import deepcopy
 from datetime import datetime
 from glob import glob
