@@ -3,14 +3,14 @@
 """
 import os
 from ._core import ExternalDriver, DriverError
-from ..dtypes import Molecule, CartesianGeometry
+from ..dtypes import Molecule, CartesianGeometry, Atom, Bond
 from copy import deepcopy
 from datetime import datetime
 from glob import glob
 from warnings import warn
 from typing import List, Callable
-from math import ceil
-
+from math import ceil, pi
+from itertools import combinations
 
 class XTBDriver(ExternalDriver):
     """
@@ -174,16 +174,18 @@ class XTBDriver(ExternalDriver):
             return mol
         inp = f"$constrain\n  force constant={force_const}\n"
 
+        lb_atoms = []
+
         for b in tbf:
             a1, a2 = mol.get_atom_idx(b.a1), mol.get_atom_idx(b.a2)
             inp += f"  distance: {a1+1}, {a2+1}, {tbf[b]:0.4f}\n"
+            lb_atoms.append(b.a1)
+            lb_atoms.append(b.a2)
 
-        #generate constraints for C-H bonds
-        for b in mol.bonds:
-            if (b.a1.symbol in "CHFO" and b.a2.symbol in "CHFO") or \
-                (b.a1.symbol == "Cl" or b.a2.symbol == "Cl"):
-                a1, a2 = mol.get_atom_idx(b.a1), mol.get_atom_idx(b.a2)
-                inp += f"  distance: {a1+1}, {a2+1}, {mol.get_bond_length(b):0.4f}\n"
+        # generate constraints for C-H bonds
+        core_bonds = tuple(mol.yield_bonds("C-C", "C-H", "C-F", "C-O", "O-H"))
+        inp += self.gen_bond_constraints(mol, core_bonds)
+        inp += self.gen_angle_constraints(mol, lb_atoms)
 
         inp += "$scan\n  mode=concerted\n"
         for i, b in enumerate(tbf):
@@ -195,6 +197,30 @@ class XTBDriver(ExternalDriver):
         m1 = self.optimize(mol, crit="crude", in_place=False, xtbinp=inp, fn_suffix=0)
 
         return m1
+    
+    def gen_bond_constraints(self, mol: Molecule, bonds: List[Bond]):
+        """ Generate bond distance constraint list """
+        constr = ""
+        for b in bonds:
+            a1, a2 = mol.get_atom_idx(b.a1), mol.get_atom_idx(b.a2)
+            constr += f"  distance: {a1+1}, {a2+1}, {mol.get_bond_length(b):0.4f}\n"
+        return constr
+    
+    def gen_angle_constraints(self, mol: Molecule, atoms: List[Atom]):
+        """ Generate constraints for all angles where atom is the middle atom """
+        constr = ""
+        for a in atoms:
+            neigbors = mol.get_connected_atoms(a)
+            for a1, a2 in combinations(neigbors, 2):
+                i1 = mol.get_atom_idx(a1) + 1
+                i2 = mol.get_atom_idx(a) + 1
+                i3 = mol.get_atom_idx(a2) + 1
+                angle = mol.get_angle(a1, a, a2) * 180 / pi
+                constr += f"  angle: {i1}, {i2}, {i3}, {angle:0.4f}\n"
+        
+        return constr
+
+
 
 
 class CRESTDriver(ExternalDriver):
