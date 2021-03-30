@@ -88,9 +88,8 @@ class Bond:
     #     else:
     #         return False
 
-    def __str__(self):
+    def __repr__(self):
         return f"Bond ({self.bond_type}) {self.a1}-{self.a2}"
-
 
 def structure_clone(atoms: List[Atom], bonds: List[Bond]) -> (List[Atom], List[Bond]):
     """
@@ -247,11 +246,9 @@ class Molecule:
         """
         Return a `set` of atoms connected to a given atom
         """
-        _a = self.get_atom(a)
-
         atoms = set()
-        for b in self.get_bonds_with_atom(_a):
-            atoms.add(b.a1 if b.a2 == _a else b.a2)
+        for b in self.get_bonds_with_atom(a):
+            atoms.add(b.a1 if b.a2 == a else b.a2)
 
         return atoms
 
@@ -295,6 +292,24 @@ class Molecule:
     def get_bond_length(self, b: Bond):
         i1, i2 = self.atoms.index(b.a1), self.atoms.index(b.a2)
         return self.geom.get_distance(i1, i2)
+    
+    def get_angle(self, a1: Atom, a2: Atom, a3: Atom):
+        "Calculate and return an angle between three atoms. a2 is the middle one"
+        i1 = self.get_atom_idx(a1)
+        i2 = self.get_atom_idx(a2)
+        i3 = self.get_atom_idx(a3)
+        return self.geom.get_angle(i1, i2, i3)
+    
+    def yield_bonds(self, *b_types):
+        """
+            Get bonds that match the atom symbols
+            b_type is a string of type "Cs-Br"
+        """
+        for bt in b_types:
+            as1, as2 = bt.split("-")
+            for b in self.bonds:
+                if {as1, as2} == {b.a1.symbol, b.a2.symbol}:
+                    yield b
 
     def fix_geom(
         self, s1: str = "C", s2: str = "C", dist: float = 1.5, center: bool = True
@@ -456,6 +471,13 @@ class Molecule:
         a21 = b2.a1 if b2.a2 == a22 else b2.a2
 
         return cls.join(m1, m2, a11, a12, a21, a22, dist=dist)
+
+    @classmethod
+    def _get_join_ap_fx(cls, ap1, ap2, dist):
+        def fx(mol_tuple):
+            return cls.join_ap(mol_tuple[0], mol_tuple[1], ap1=ap1, ap2=ap2, dist=dist)
+        
+        return fx
 
     def to_xml(self, pretty=True):
         """

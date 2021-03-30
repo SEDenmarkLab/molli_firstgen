@@ -148,6 +148,16 @@ class CartesianGeometry:
         p2 = self.coord[idx2]
 
         return distance(p1, p2)
+    
+    def get_angle(self, idx1:int, idx2:int, idx3:int):
+        """
+        Measure the angle
+        """
+        v1 = self.coord[idx1] - self.coord[idx2]
+        v2 = self.coord[idx3] - self.coord[idx2]
+        dt = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+        return np.arccos(dt)
+
 
     def get_coord(self, idx: int):
         return self.coord[idx]
@@ -224,3 +234,6 @@ class CartesianGeometry:
             x, y, z = xyz
             res += f"{atoms[i]} {x:>10.4f} {y:>10.4f} {z:>10.4f}\n"
         return res
+    
+    def clone_geometry(self, other:CartesianGeometry):
+        self.coord = deepcopy(other.coord)
