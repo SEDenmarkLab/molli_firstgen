@@ -3,14 +3,14 @@
 """
 import os
 from ._core import ExternalDriver, DriverError
-from ..dtypes import Molecule, CartesianGeometry
+from ..dtypes import Atom, Bond, Molecule, CartesianGeometry
 from copy import deepcopy
 from datetime import datetime
 from glob import glob
 from warnings import warn
 from typing import List, Callable
-from math import ceil
-
+from math import ceil, pi
+from itertools import combinations
 
 class XTBDriver(ExternalDriver):
     """
@@ -24,14 +24,14 @@ class XTBDriver(ExternalDriver):
 
     def __init__(
         self,
-        cwd: str = "/temp_xtb/",
+        scratch_dir: str = "/temp_xtb/",
         nprocs: int = 1,
         method: str = "gfn2",
         accuracy: float = 1.0,
         opt_maxiter: int = 100,
         opt_crit: str = "normal",  # crude, sloppy, normal, tight, vtight
     ):
-        super().__init__(cwd=cwd, nprocs=nprocs)
+        super().__init__(scratch_dir=scratch_dir, nprocs=nprocs)
 
         self.method = method
         self.accuracy = accuracy
@@ -106,7 +106,10 @@ class XTBDriver(ExternalDriver):
         """
         cmd = []  # collection of command line arguments for xtb binary
         jobid = self.__class__.JOB_ID
-        name = f"{self.PREFIX}.opt.{os.getpid()}.{jobid}.{fn_suffix}"
+
+        sdr = self.mktemp()
+
+        name = f"{self.PREFIX}.opt.{fn_suffix}"
         with open(f"{self.cwd}/{name}.xyz", "wt") as xyzf:
             xyzf.write(mol.to_xyz())
 
@@ -117,16 +120,12 @@ class XTBDriver(ExternalDriver):
 
         cmd.extend(
             (
-                f"{name}.xyz",
                 self.method,
+                f"{name}.xyz",
                 "--opt",
                 _crit,
                 "--cycles",
-                self.opt_maxiter,
-                "--acc",
-                self.accuracy,
-                "--namespace",
-                name,
+                self.opt_maxiter
             )
         )
 
@@ -138,23 +137,29 @@ class XTBDriver(ExternalDriver):
 
         self(*cmd)
 
-        with open(f"{self.cwd}/{name}.xtbopt.xyz") as f:
+        with open(f"{self.cwd}/xtbopt.xyz") as f:
             nxyz = f.read()
-            if not in_place:
-                mol1 = deepcopy(mol)
-                mol1.update_geom_from_xyz(nxyz, assert_single=True)
-                return mol1
-            else:
-                mol.update_geom_from_xyz(nxyz, assert_single=True)
+
+        self.cleanup(sdr)
+
+        if not in_place:
+            mol1 = deepcopy(mol)
+            mol1.update_geom_from_xyz(nxyz, assert_single=True)
+            return mol1
+        else:
+            mol.update_geom_from_xyz(nxyz, assert_single=True)
+
 
     def fix_long_bonds(
         self,
         mol: Molecule,
-        rss_length_thresh: float = 3.0,
-        rss_steps: float = 20,
-        force_const: float = 0.05,
-        target_len: float = 1.75,
+        rss_length_thresh: float = 4.0,
+        rss_steps: float = 15,
+        rss_maxcycle: int = 20,
+        force_const: float = 0.5,
+        target_len: float = 1.5,
         in_place: bool = False,
+        constrain_bonds: list = ["C-C", "C-H", "C-F", "C-O", "O-H", "N-Cl"],
         fn_suffix: str = 0,
     ):
         """
@@ -169,20 +174,53 @@ class XTBDriver(ExternalDriver):
             return mol
         inp = f"$constrain\n  force constant={force_const}\n"
 
-        for b in tbf:
+        lb_atoms = set()
 
+        for b in tbf:
             a1, a2 = mol.get_atom_idx(b.a1), mol.get_atom_idx(b.a2)
-            inp += f"  distance: {a1+1}, {a2+1}, {tbf[b]:0.6f}\n"
+            inp += f"  distance: {a1+1}, {a2+1}, {tbf[b]:0.4f}\n"
+            lb_atoms.add(b.a1)
+            lb_atoms.add(b.a2)
+
+        # generate constraints for C-H bonds
+        core_bonds = tuple(mol.yield_bonds(*constrain_bonds))
+        inp += self.gen_bond_constraints(mol, core_bonds)
+        inp += self.gen_angle_constraints(mol, lb_atoms)
 
         inp += "$scan\n  mode=concerted\n"
         for i, b in enumerate(tbf):
-            inp += f"  {i+1}: {tbf[b]}, {target_len}, {rss_steps}\n"
+            inp += f"  {i+1}: {tbf[b]:0.4f}, {target_len:0.4f}, {rss_steps}\n"
 
+        inp += f"$opt\n  maxcycle={rss_maxcycle}\n"
         inp += "$end\n"
 
-        m1 = self.optimize(mol, crit="sloppy", in_place=False, xtbinp=inp, fn_suffix=0)
+        m1 = self.optimize(mol, crit="crude", in_place=False, xtbinp=inp, fn_suffix=0)
 
         return m1
+    
+    def gen_bond_constraints(self, mol: Molecule, bonds: List[Bond]):
+        """ Generate bond distance constraint list """
+        constr = ""
+        for b in bonds:
+            a1, a2 = mol.get_atom_idx(b.a1), mol.get_atom_idx(b.a2)
+            constr += f"  distance: {a1+1}, {a2+1}, {mol.get_bond_length(b):0.4f}\n"
+        return constr
+    
+    def gen_angle_constraints(self, mol: Molecule, atoms: List[Atom]):
+        """ Generate constraints for all angles where atom is the middle atom """
+        constr = ""
+        for a in atoms:
+            neigbors = mol.get_connected_atoms(a)
+            for a1, a2 in combinations(neigbors, 2):
+                i1 = mol.get_atom_idx(a1) + 1
+                i2 = mol.get_atom_idx(a) + 1
+                i3 = mol.get_atom_idx(a2) + 1
+                angle = mol.get_angle(a1, a, a2) * 180 / pi
+                constr += f"  angle: {i1}, {i2}, {i3}, {angle:0.4f}\n"
+        
+        return constr
+
+
 
 
 class CRESTDriver(ExternalDriver):
