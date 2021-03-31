@@ -88,9 +88,8 @@ class Bond:
     #     else:
     #         return False
 
-    def __str__(self):
+    def __repr__(self):
         return f"Bond ({self.bond_type}) {self.a1}-{self.a2}"
-
 
 def structure_clone(atoms: List[Atom], bonds: List[Bond]) -> (List[Atom], List[Bond]):
     """
@@ -472,6 +471,13 @@ class Molecule:
         a21 = b2.a1 if b2.a2 == a22 else b2.a2
 
         return cls.join(m1, m2, a11, a12, a21, a22, dist=dist)
+
+    @classmethod
+    def _get_join_ap_fx(cls, ap1, ap2, dist):
+        def fx(mol_tuple):
+            return cls.join_ap(mol_tuple[0], mol_tuple[1], ap1=ap1, ap2=ap2, dist=dist)
+        
+        return fx
 
     def to_xml(self, pretty=True):
         """

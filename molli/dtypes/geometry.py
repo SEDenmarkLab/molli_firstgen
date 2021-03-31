@@ -234,3 +234,6 @@ class CartesianGeometry:
             x, y, z = xyz
             res += f"{atoms[i]} {x:>10.4f} {y:>10.4f} {z:>10.4f}\n"
         return res
+    
+    def clone_geometry(self, other:CartesianGeometry):
+        self.coord = deepcopy(other.coord)

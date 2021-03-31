@@ -1,7 +1,8 @@
-**/*.pyc
 **/*.mol2
 **/*.xyz
+**/*.html
 **/*.zip
 .vscode/
 molli.egg-info/
 **/__pycache__
+**/*.pyc

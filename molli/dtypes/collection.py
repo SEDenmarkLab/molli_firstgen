@@ -6,7 +6,7 @@ import json
 from zipfile import ZipFile
 from itertools import product, combinations_with_replacement
 from multiprocessing import Pool
-
+import asyncio as aio
 
 class Collection:
     """
@@ -32,13 +32,17 @@ class Collection:
         elif isinstance(item, str):
             return self.molecules[self.mol_index.index(item)]
 
-    def to_multixyz(self):
+    def to_multixyz(self, fn: str=None):
         """
         Return a multixyz representation of molecules
         """
         result = ""
         for m in self:
             result += m.to_xyz()
+
+        if fn:
+            with open(fn, "wt") as f:
+                f.write(result)
 
         return result
 
@@ -67,15 +71,11 @@ class Collection:
                     result.append(fx(m))
                     if show_progress and not (i + 1) % update:
                         print(
-                            f"{i+1:>10} molecules processed ({(i+1)/L:>6.2%}) Total WCT: {datetime.now() - start}"
+                            f"{i+1:>10} molecules processed ({(i+1)/L:>6.2%}) Total WCT: {datetime.now() - start}", flush=True
                         )
 
             if workers > 1:
-                # This is where the multiprocessing fun starts. Buckle up!
-                if show_progress:
-                    print(f"(in {workers} parallel processes)")
-                pool = Pool(workers)
-
+                              
                 total = 0
 
                 batch_size = max(update, workers)
@@ -87,12 +87,15 @@ class Collection:
                     chunk = self.molecules[
                         i * batch_size : min((i + 1) * batch_size, L)
                     ]
-                    result.extend(pool.map(fx, chunk))
+
+                    with Pool(workers) as pool:
+                        result.extend(pool.map(fx, chunk))
+
                     total += len(chunk)
 
                     if show_progress:
                         print(
-                            f"{total:>10} molecules processed ({total/L:>6.2%}) Total WCT: {datetime.now() - start}"
+                            f"{total:>10} molecules processed ({total/L:>6.2%}) Total WCT: {datetime.now() - start}", flush=True
                         )
 
             if show_progress:
@@ -145,15 +148,13 @@ class Collection:
 
     @classmethod
     def join(
-        cls, mc1: Collection, mc2: Collection, ap1: str, ap2: str, dist: float = 10.0
+        cls, mc1: Collection, mc2: Collection, ap1: str, ap2: str, dist: float = 10.0, nprocs=1,
     ):
         """
         A great function that joins fragments in collections (!)
         VERY USEFUL FOR IN SILICO LIBRARY GENERATION
         """
-
         molecules = []
-
         for m1, m2 in product(mc1, mc2):
             molecules.append(Molecule.join_ap(m1, m2, ap1=ap1, ap2=ap2, dist=dist))
 

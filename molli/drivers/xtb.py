@@ -24,14 +24,14 @@ class XTBDriver(ExternalDriver):
 
     def __init__(
         self,
-        cwd: str = "/temp_xtb/",
+        scratch_dir: str = "/temp_xtb/",
         nprocs: int = 1,
         method: str = "gfn2",
         accuracy: float = 1.0,
         opt_maxiter: int = 100,
         opt_crit: str = "normal",  # crude, sloppy, normal, tight, vtight
     ):
-        super().__init__(cwd=cwd, nprocs=nprocs)
+        super().__init__(scratch_dir=scratch_dir, nprocs=nprocs)
 
         self.method = method
         self.accuracy = accuracy
@@ -106,7 +106,10 @@ class XTBDriver(ExternalDriver):
         """
         cmd = []  # collection of command line arguments for xtb binary
         jobid = self.__class__.JOB_ID
-        name = f"{self.PREFIX}.opt.{jobid}.{fn_suffix}"
+
+        sdr = self.mktemp()
+
+        name = f"{self.PREFIX}.opt.{fn_suffix}"
         with open(f"{self.cwd}/{name}.xyz", "wt") as xyzf:
             xyzf.write(mol.to_xyz())
 
@@ -122,11 +125,7 @@ class XTBDriver(ExternalDriver):
                 "--opt",
                 _crit,
                 "--cycles",
-                self.opt_maxiter,
-                # "--acc",
-                # self.accuracy,
-                "--namespace",
-                name,
+                self.opt_maxiter
             )
         )
 
@@ -138,10 +137,10 @@ class XTBDriver(ExternalDriver):
 
         self(*cmd)
 
-        with open(f"{self.cwd}/{name}.xtbopt.xyz") as f:
+        with open(f"{self.cwd}/xtbopt.xyz") as f:
             nxyz = f.read()
 
-        # self.cleanup(f"*{name}*")
+        self.cleanup(sdr)
 
         if not in_place:
             mol1 = deepcopy(mol)
@@ -160,6 +159,7 @@ class XTBDriver(ExternalDriver):
         force_const: float = 0.5,
         target_len: float = 1.5,
         in_place: bool = False,
+        constrain_bonds: list = ["C-C", "C-H", "C-F", "C-O", "O-H", "N-Cl"],
         fn_suffix: str = 0,
     ):
         """
@@ -174,16 +174,16 @@ class XTBDriver(ExternalDriver):
             return mol
         inp = f"$constrain\n  force constant={force_const}\n"
 
-        lb_atoms = []
+        lb_atoms = set()
 
         for b in tbf:
             a1, a2 = mol.get_atom_idx(b.a1), mol.get_atom_idx(b.a2)
             inp += f"  distance: {a1+1}, {a2+1}, {tbf[b]:0.4f}\n"
-            lb_atoms.append(b.a1)
-            lb_atoms.append(b.a2)
+            lb_atoms.add(b.a1)
+            lb_atoms.add(b.a2)
 
         # generate constraints for C-H bonds
-        core_bonds = tuple(mol.yield_bonds("C-C", "C-H", "C-F", "C-O", "O-H"))
+        core_bonds = tuple(mol.yield_bonds(*constrain_bonds))
         inp += self.gen_bond_constraints(mol, core_bonds)
         inp += self.gen_angle_constraints(mol, lb_atoms)
 
