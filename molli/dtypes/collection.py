@@ -75,29 +75,28 @@ class Collection:
                         )
 
             if workers > 1:
-                # This will feature asynchronous implementation of t
-                
-                # total = 0
+                              
+                total = 0
 
-                # batch_size = max(update, workers)
-                # n_batches = L // batch_size + 1
+                batch_size = max(update, workers)
+                n_batches = L // batch_size + 1
 
-                # result = []
+                result = []
 
-                # for i in range(n_batches):
-                #     chunk = self.molecules[
-                #         i * batch_size : min((i + 1) * batch_size, L)
-                #     ]
+                for i in range(n_batches):
+                    chunk = self.molecules[
+                        i * batch_size : min((i + 1) * batch_size, L)
+                    ]
 
-                #     with Pool(workers) as pool:
-                #         result.extend(pool.map(fx, chunk))
+                    with Pool(workers) as pool:
+                        result.extend(pool.map(fx, chunk))
 
-                #     total += len(chunk)
+                    total += len(chunk)
 
-                #     if show_progress:
-                #         print(
-                #             f"{total:>10} molecules processed ({total/L:>6.2%}) Total WCT: {datetime.now() - start}", flush=True
-                #         )
+                    if show_progress:
+                        print(
+                            f"{total:>10} molecules processed ({total/L:>6.2%}) Total WCT: {datetime.now() - start}", flush=True
+                        )
 
             if show_progress:
                 print(f"Complete! Total WCT: {datetime.now() - start}\n")
