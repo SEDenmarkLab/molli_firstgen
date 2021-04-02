@@ -8,6 +8,7 @@ from itertools import product, combinations_with_replacement
 from multiprocessing import Pool
 import asyncio as aio
 
+
 class Collection:
     """
     This class provides convenience when handling molecule collections (zip files)
@@ -32,7 +33,7 @@ class Collection:
         elif isinstance(item, str):
             return self.molecules[self.mol_index.index(item)]
 
-    def to_multixyz(self, fn: str=None):
+    def to_multixyz(self, fn: str = None):
         """
         Return a multixyz representation of molecules
         """
@@ -71,11 +72,12 @@ class Collection:
                     result.append(fx(m))
                     if show_progress and not (i + 1) % update:
                         print(
-                            f"{i+1:>10} molecules processed ({(i+1)/L:>6.2%}) Total WCT: {datetime.now() - start}", flush=True
+                            f"{i+1:>10} molecules processed ({(i+1)/L:>6.2%}) Total WCT: {datetime.now() - start}",
+                            flush=True,
                         )
 
             if workers > 1:
-                              
+
                 total = 0
 
                 batch_size = max(update, workers)
@@ -95,7 +97,8 @@ class Collection:
 
                     if show_progress:
                         print(
-                            f"{total:>10} molecules processed ({total/L:>6.2%}) Total WCT: {datetime.now() - start}", flush=True
+                            f"{total:>10} molecules processed ({total/L:>6.2%}) Total WCT: {datetime.now() - start}",
+                            flush=True,
                         )
 
             if show_progress:
@@ -148,7 +151,13 @@ class Collection:
 
     @classmethod
     def join(
-        cls, mc1: Collection, mc2: Collection, ap1: str, ap2: str, dist: float = 10.0, nprocs=1,
+        cls,
+        mc1: Collection,
+        mc2: Collection,
+        ap1: str,
+        ap2: str,
+        dist: float = 10.0,
+        nprocs=1,
     ):
         """
         A great function that joins fragments in collections (!)
@@ -163,8 +172,10 @@ class Collection:
 
 class CollectionFile:
     """
-    This context manager provides access to Molecule items from a collection
-    when loading all of them in the memory is not an optimal strategy
+    This context manager provides access to Molecule items from a collection file.
+    It provides lower level interactions with the file, such as modifications to individual files.
+
+    It is also more convenient to use when only a few items need to be processed (big libraries tend to be cumbersome to load)
 
     Use this when you need to faster access to individual files rather than the entire collection
     if save: upon exiting the molecule objects in the zip file will be updated
@@ -177,29 +188,46 @@ class CollectionFile:
         self._to_be_updated = []
 
     def __enter__(self):
-        self.__collection: Collection = None
-        self.__fstream = ZipFile(self.fpath, "r")
-        self._meta = self.__fstream.read("__molli__")
+        self._fstream = ZipFile(self.fpath, "r")
+        with self._fstream.open("__molli__") as _mf:
+            self._meta = json.load(_mf)
+        self._collection = Collection(self._meta["name"])
+        self.name = self._collection.name
         return self
 
     def __getitem__(self, item: str):
-        if hasattr(self, "__collection") and item in self.__collection.mol_index:
+        if hasattr(self, "_collection") and item in self._collection.mol_index:
             # if collection (a buffer for molecule objects) exists
-            return self.__collection[item]
-        if hasattr(self, "__fstream") and hasattr(self, "_meta"):
+            return self._collection[item]
+        elif hasattr(self, "_fstream") and hasattr(self, "_meta"):
             # ie if the file is open
             # and the item was not located in the existing collection
-            pass
+            idx = self._meta["idx"].index(item)
+            with self._fstream.open(f"{idx}.xml") as mf:
+                m = Molecule.from_file(mf)
+                self._collection.add(m)
+
+            return m
+
         else:
             raise IOError(
                 f"Unable to import a molecule {item}. Not found in buffer, and the file stream is closed."
             )
 
+    def save(self):
+        with ZipFile(self.fpath, "a") as zf:
+            for m in self._collection.mol_index:
+                if m not in self._meta["idx"]:
+                    raise IndexError("Malformed zip")
+                else:
+                    fn = self._meta["files"][self._meta["idx"].index(m)]
+                    with zf.open(fn, "w") as mf:
+                        mf.write(bytes(self._collection[m].to_xml(), encoding="utf8"))
+
     def __exit__(self, *args):
-        self.__fstream.close()
+        self._fstream.close()
 
         if self._save_on_exit:
-            ...
-            # TODO: code that updates the molecules if
+            self.save()
 
-        del self.__fstream
+        del self._fstream

@@ -9,3 +9,4 @@ molli.egg-info/
 
 # Below is the list of modules in development that should not be uploaded until they become final
 **/dev_*.py
+# **/old_*.py

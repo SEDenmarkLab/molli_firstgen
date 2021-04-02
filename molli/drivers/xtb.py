@@ -1,8 +1,4 @@
-"""
-    This module provides interactions with XTB package
-"""
-import os
-from ._core import ExternalDriver, DriverError
+from .dev__core import AsyncExternalDriver
 from ..dtypes import Atom, Bond, Molecule, CartesianGeometry
 from copy import deepcopy
 from datetime import datetime
@@ -11,148 +7,56 @@ from warnings import warn
 from typing import List, Callable
 from math import ceil, pi
 from itertools import combinations
+import asyncio as aio
 
-class XTBDriver(ExternalDriver):
-    """
-    This driver provides functionality for
-    --- XTB package (Grimme group) ---
-    https://xtb-docs.readthedocs.io/en/latest/setup.html
-    """
 
-    PREFIX = "mx"
-    JOB_ID = 0
-
-    def __init__(
-        self,
-        scratch_dir: str = "/temp_xtb/",
-        nprocs: int = 1,
-        method: str = "gfn2",
-        accuracy: float = 1.0,
-        opt_maxiter: int = 100,
-        opt_crit: str = "normal",  # crude, sloppy, normal, tight, vtight
-    ):
-        super().__init__(scratch_dir=scratch_dir, nprocs=nprocs)
-
-        self.method = method
-        self.accuracy = accuracy
-        self.opt_maxiter = opt_maxiter
-        self.opt_crit = opt_crit
-
-    def __call__(self, *args):
-        # print("xtb", *args, "-P", self.nprocs)
-        super().__call__("xtb", *args, "-P", self.nprocs)
-
-    def gen_constraints(
-        self,
-        mol: Molecule,
-        fc: float = 0.5,
-        maxcycle: int = 10,
-        distances: list = [],
-        angles: list = [],
-        dihedrals: list = [],
-        scans: list = [],
-        concerted=True,
-    ):
-        """
-        Generate constraint file
-        distances = [(a1, a2, val1), (a3, a4, val2), ...]
-        angles = [(a1, a2, a3, val1), ...]
-        scan = [(idx, val_start, val_end, steps)]
-        """
-        result = f"$constrain\n  force constant= {fc}\n"
-        for a1, a2, val in distances:
-            i1, i2 = mol.get_atom_idx(a1), mol.get_atom_idx(a2)
-            result += f"  distance: {i1+1}, {i2+1}, {val}\n"
-
-        for a1, a2, a3, val in angles:
-            i1, i2, i3 = (
-                mol.get_atom_idx(a1),
-                mol.get_atom_idx(a2),
-                mol.get_atom_idx(a3),
-            )
-            result += f"  angle: {i1+1}, {i2+1}, {i3+1}, {val}\n"
-
-        for a1, a2, a3, a4, val in dihedrals:
-            i1, i2, i3, i4 = (
-                mol.get_atom_idx(a1),
-                mol.get_atom_idx(a2),
-                mol.get_atom_idx(a3),
-                mol.get_atom_idx(a4),
-            )
-            result += f"  dihedral: {i1+1}, {i2+1}, {i3+1}, {i4+1}, {val}\n"
-
-        if scans:
-            result += "$scan\n"
-            if concerted and len(scans) > 1:
-                result += "  mode = concerted\n"
-            for idx, start, end, steps in scans:
-                result += f"  {idx}: {start}, {end}, {steps}\n"
-
-        result += f"$opt\n  maxcycle={maxcycle}\n$end\n"
-
-        return result
-
-    def optimize(
-        self,
-        mol: Molecule,
-        crit: str = None,  # overrides criterion in the method, if not none
-        in_place: bool = False,
-        xtbinp: str = "",
-        fn_suffix=0,
-    ):
-        """
-        Attempt a geometry optimization with parameters from the instance.
-
-        """
-        cmd = []  # collection of command line arguments for xtb binary
-        jobid = self.__class__.JOB_ID
-
-        sdr = self.mktemp()
-
-        name = f"{self.PREFIX}.opt.{fn_suffix}"
-        with open(f"{self.cwd}/{name}.xyz", "wt") as xyzf:
-            xyzf.write(mol.to_xyz())
-
-        if crit != None:
-            _crit = crit
-        else:
-            _crit = self.opt_crit
-
-        cmd.extend(
-            (
-                self.method,
-                f"{name}.xyz",
-                "--opt",
-                _crit,
-                "--cycles",
-                self.opt_maxiter
-            )
+class AsyncXTBDriver(AsyncExternalDriver):
+    def __init__(self, name="", scratch_dir="", nprocs=1, encoding="utf8"):
+        super().__init__(
+            name=name, scratch_dir=scratch_dir, nprocs=nprocs, encoding=encoding
         )
 
-        if xtbinp:
-            with open(f"{self.cwd}/{name}.inp", "wt") as inpf:
-                inpf.write(xtbinp)
-
-            cmd.extend(("--input", f"{name}.inp"))
-
-        self(*cmd)
-
-        with open(f"{self.cwd}/xtbopt.xyz") as f:
-            nxyz = f.read()
-
-        self.cleanup(sdr)
-
-        if not in_place:
-            mol1 = deepcopy(mol)
-            mol1.update_geom_from_xyz(nxyz, assert_single=True)
-            return mol1
-        else:
-            mol.update_geom_from_xyz(nxyz, assert_single=True)
-
-
-    def fix_long_bonds(
+    async def optimize(
         self,
         mol: Molecule,
+        method: str = "gff",
+        crit: str = "normal",
+        xtbinp: str = "",
+        in_place: bool = False,
+    ):
+        """
+        Attempt a geometry optimization with parameters specified
+        """
+
+        g0_xyz = mol.to_xyz()
+
+        nn = mol.name
+
+        # command that will be used to execute xtb package
+        _cmd = f"""xtb {nn}_g0.xyz --{method} --opt {crit} {"--input param.inp" if xtbinp else ""} -P {self.nprocs}"""
+
+        code, files, stdout, stderr = await self.aexec(
+            _cmd,
+            inp_files={f"{nn}_g0.xyz": g0_xyz, "param.inp": xtbinp},
+            out_files=["xtbopt.xyz"],
+        )
+
+        if "xtbopt.xyz" in files:
+            nxyz = files["xtbopt.xyz"]
+
+            if not in_place:
+                mol1 = deepcopy(mol)
+                mol1.update_geom_from_xyz(nxyz, assert_single=True)
+                return mol1
+            else:
+                mol.update_geom_from_xyz(nxyz, assert_single=True)
+        else:
+            raise FileNotFoundError("Could not locate xtb output file.")
+
+    async def fix_long_bonds(
+        self,
+        mol: Molecule,
+        method: str = "gff",
         rss_length_thresh: float = 4.0,
         rss_steps: float = 15,
         rss_maxcycle: int = 20,
@@ -194,19 +98,27 @@ class XTBDriver(ExternalDriver):
         inp += f"$opt\n  maxcycle={rss_maxcycle}\n"
         inp += "$end\n"
 
-        m1 = self.optimize(mol, crit="crude", in_place=False, xtbinp=inp, fn_suffix=0)
+        m1 = await self.optimize(
+            mol,
+            method=method,
+            crit="crude",
+            xtbinp=inp,
+            in_place=False,
+        )
 
         return m1
-    
-    def gen_bond_constraints(self, mol: Molecule, bonds: List[Bond]):
+
+    @staticmethod
+    def gen_bond_constraints(mol: Molecule, bonds: List[Bond]):
         """ Generate bond distance constraint list """
         constr = ""
         for b in bonds:
             a1, a2 = mol.get_atom_idx(b.a1), mol.get_atom_idx(b.a2)
             constr += f"  distance: {a1+1}, {a2+1}, {mol.get_bond_length(b):0.4f}\n"
         return constr
-    
-    def gen_angle_constraints(self, mol: Molecule, atoms: List[Atom]):
+
+    @staticmethod
+    def gen_angle_constraints(mol: Molecule, atoms: List[Atom]):
         """ Generate constraints for all angles where atom is the middle atom """
         constr = ""
         for a in atoms:
@@ -217,34 +129,5 @@ class XTBDriver(ExternalDriver):
                 i3 = mol.get_atom_idx(a2) + 1
                 angle = mol.get_angle(a1, a, a2) * 180 / pi
                 constr += f"  angle: {i1}, {i2}, {i3}, {angle:0.4f}\n"
-        
+
         return constr
-
-
-
-
-class CRESTDriver(ExternalDriver):
-    """
-    This driver provides functionality for
-    --- CREST package (Grimme group) ---
-    https://xtb-docs.readthedocs.io/en/latest/setup.html
-    """
-
-    WORKFLOWS = {
-        "quick:v3:gfn2//gfnff": [],
-    }
-    PREFIX = "molli.crest"
-    JOB_ID = 0
-
-    def find_conformers(
-        self,
-        mol: Molecule,
-        workflow: str = "gfn2-xtb",
-        ewin: float = 15.0,  # in kJ/mol
-        keep_rotamers: bool = True,
-    ):
-        """
-        Take the molecule's geometry and find conformers
-        ewin: energy window of 15 kJ/mol
-        """
-        raise NotImplementedError
