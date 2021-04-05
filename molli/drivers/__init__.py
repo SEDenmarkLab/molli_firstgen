@@ -5,5 +5,9 @@
 # TODO add checks for package installations maybe?
 # TODO add warnings for packages that have not been installed
 
-from .obabel import OpenBabelDriver
-from .xtb import XTBDriver, CRESTDriver
+
+from ._core import AsyncConcurrent as Concurrent
+
+# from .obabel import OpenBabelDriver
+from .xtb import AsyncXTBDriver as XTBDriver
+from .crest import AsyncCRESTDriver as CRESTDriver

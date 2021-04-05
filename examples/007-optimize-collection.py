@@ -1,18 +1,13 @@
 """
-In this example we will optimize a collection of phosphoramidite-CuCl things
+In this example we will optimize a molecule collection
+Using an asynchronous aggregator
 """
-import molli as ml
-import os
+import molli as ml  # pylint: disable=import-error
 
-# loading molecular collection
-FILES = os.path.join(os.path.dirname(__file__), "files")
-TEMP = os.path.join(os.path.dirname(__file__), "temp")
+collection = ml.Collection.from_zip("tests/ac.zip")
+xtb = ml.XTBDriver("myxtb", scratch_dir="scratch/", nprocs=1)
+opt = ml.Concurrent(collection, update=1)(xtb.optimize)(method="gfn2", crit="tight")
+col_opt = ml.Collection(name="gfnopt-test", molecules=opt)
 
-binols = ml.dtypes.MolCollection.from_zip(f"{FILES}/binol-p-cucl.zip")
-
-#setting up the optimization driver
-xtb = ml.drivers.XTBDriver("temp")
-opts = binols.applyfx(xtb.minimize)(nprocs=1)
-
-new = ml.dtypes.MolCollection(name="binols-cucl-optimized", molecules=opts)
-new.to_zip(f"{FILES}/binol-p-cucl-opt.zip")
+col_opt.to_zip("tests/ac-gfo.zip")
+col_opt.to_multixyz("tests/ac-gfo.xyz")
