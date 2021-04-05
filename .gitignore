@@ -1,3 +1,6 @@
+/scratch
+/temp
+
 **/*.mol2
 **/*.xyz
 **/*.html

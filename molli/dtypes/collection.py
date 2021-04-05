@@ -32,6 +32,8 @@ class Collection:
             return self.molecules[item]
         elif isinstance(item, str):
             return self.molecules[self.mol_index.index(item)]
+        else:
+            return Collection(self.name, self.molecules[item])
 
     def to_multixyz(self, fn: str = None):
         """

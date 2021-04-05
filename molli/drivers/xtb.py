@@ -1,4 +1,4 @@
-from .dev__core import AsyncExternalDriver
+from ._core import AsyncExternalDriver
 from ..dtypes import Atom, Bond, Molecule, CartesianGeometry
 from copy import deepcopy
 from datetime import datetime
@@ -35,6 +35,7 @@ class AsyncXTBDriver(AsyncExternalDriver):
         # command that will be used to execute xtb package
         _cmd = f"""xtb {nn}_g0.xyz --{method} --opt {crit} {"--input param.inp" if xtbinp else ""} -P {self.nprocs}"""
 
+        # pylint: disable=unused-variable
         code, files, stdout, stderr = await self.aexec(
             _cmd,
             inp_files={f"{nn}_g0.xyz": g0_xyz, "param.inp": xtbinp},

@@ -1,9 +1,11 @@
+from __future__ import annotations
 import asyncio as aio
 from asyncio.subprocess import PIPE
 from typing import Callable, Dict, List, Awaitable
 from tempfile import TemporaryDirectory as TempDir, NamedTemporaryFile as TempFile
+import functools
 import os
-
+from datetime import datetime
 from ..dtypes import CollectionFile, Collection
 
 
@@ -94,20 +96,23 @@ class AsyncExternalDriver:
         return result
 
 
-class AsyncAggregator:
+class AsyncConcurrent:
     """
-    This class provides functionality for processing of molecule collections
-    using asynchronous driver awaitables that
+    This class should be used as a decorator that allows to define a function on a molecule object,
+    but apply to a collection
     """
 
-    PREFIX = "molli-agg"
+    PREFIX = "molli-acc"
 
     def __init__(
         self,
-        collection: Collection | CollectionFile,
+        collection: Collection,
+        /,
         scratch_dir: str = "",
         logfile: str = "",
-        dumpfile: str = "",
+        update: float = 1.0,
+        timeout: float = 120.0,
+        concurrent=4,
     ):
         """
         `scratch_dir` is the directory that will be used for temporary file storage
@@ -116,36 +121,119 @@ class AsyncAggregator:
 
         `dumpfile` is the new collection that will be dumped as a result of the processing
         """
-        pass
+        self.collection = collection
+        self.scratch_dir = scratch_dir
+        self.logfile = logfile
+        self.concurrent = concurrent
+        # self._queue: aio.Queue
+        # self._construct_queue(self.collection)
+        self.update = update
+        self.timeout = timeout
+        self._result = [None] * len(collection)
 
-    def __call__(self, fx: Callable):
-        pass
+    def _construct_queue(self, collection: Collection):
+        self._queue = aio.Queue()
+        for i, m in enumerate(collection):
+            self._queue.put_nowait((i, m))
 
-    async def _worker(self):
+    async def _worker(self, fx: Awaitable):
+        while not self._queue.empty():
+            i, mol = await self._queue.get()
+            try:
+                res = await aio.wait_for(fx(mol), timeout=self.timeout)
+            except Exception as xc:
+                res = xc
+            self._queue.task_done()
+            self._result[i] = res
+
+    def _spawn_workers(self, fx: Awaitable):
+        if hasattr(self, "_worker_pool"):
+            raise Exception("")
+        else:
+            self._worker_pool = []
+            for _ in range(self.concurrent):
+                task = aio.create_task(self._worker(fx))
+                self._worker_pool.append(task)
+
+    def _cancel_workers(self):
+        for w in self._worker_pool:
+            w.cancel()
+
+    def get_status(self):
+
+        total = len(self.collection)
+        success = 0
+        timed_out = 0
+        other_err = 0
+        not_started = 0
+
+        for x in self._result:
+            if isinstance(x, Exception) and isinstance(x, aio.TimeoutError):
+                timed_out += 1
+            elif isinstance(x, Exception):
+                other_err += 1
+            elif x == None:
+                not_started += 1
+            else:
+                success += 1
+
+        return total, success, timed_out, other_err, not_started
+        # return f"{datetime.now()} : {success:>7}(++) {timed_out:>7}(??) {other_err:>7}(**) {not_started:>7}(..)"
+
+    async def aexec(self, fx: Awaitable):
+        self._queue: aio.Queue
+        self._construct_queue(self.collection)
+        self._spawn_workers(fx)
+
+        start = datetime.now()
+        print(f"Starting to process")
+
+        while True:
+            try:
+                await aio.wait_for(self._queue.join(), timeout=self.update)
+            except aio.TimeoutError:
+                pass
+            except aio.CancelledError:
+                print("One or more of the workers was cancelled. Exiting...")
+                self._cancel_workers()
+                break
+            except KeyboardInterrupt:
+                print("User interrupted the script. Exiting...")
+                self._cancel_workers()
+                break
+            else:
+                break
+            finally:
+                total, success, timed_out, other_err, not_started = self.get_status()
+                s = success
+                sr = s / total
+                e = timed_out + other_err
+                er = e / total
+
+                print(
+                    f"{datetime.now() - start} --- successful {sr:>6.1%} ({s:>7}) --- failed {er:>6.1%} ({e:>7})"
+                )
+
+        del self._queue
+
+        return self._result
+
+    def _exec(self, fx: Awaitable):
+        return aio.run(self.aexec(fx))
+
+    def __call__(self, fx: Awaitable):
         """
-        *Non-public coroutine*
-
-        This coroutine processes the queue.
+        This is a decorator
         """
-        pass
 
-    async def _add_task(self, coro: Awaitable, **kwargs):
-        """
-        *Non-public coroutine*
+        def inner(**kwargs):
+            """
+            `kwargs` are applied to `fx` !
+            """
 
-        This coroutine defines a task that needs to be performed
-        kwargs define all parameters that are passed alongside a molecule
-        """
-        pass
+            async def f(m):
+                return await fx(m, **kwargs)
 
-    async def _construct_queue(self):
-        pass
+            return self._exec(f)
 
-    async def _process_monitor(self):
-        pass
-
-    def __enter__(self):
-        pass
-
-    def __exit__(self, *args):
-        pass
+        return inner
