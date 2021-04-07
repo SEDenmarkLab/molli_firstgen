@@ -19,11 +19,14 @@ class AsyncCRESTDriver(AsyncExternalDriver):
     async def conformer_search(
         self,
         mol: Molecule,
-        method: str = "gff",
-        ewin: float = 10,
-        mdlen: float = 20,
-        mddump: float = 0.250,
-        vbdump: float = 1,
+        method: str = "gfnff",
+        ewin: float = 6.0,
+        mdlen: float = 15.0,
+        mddump: float = 250.0,
+        vbdump: float = 1.0,
+        chk_topo: bool = False,
+        constr_val_angles: list = ['P', 'Cu'],
+        force_const: float = 0.05
     ):
         """
         `ewin`: energy window in kcal/mol
@@ -33,45 +36,89 @@ class AsyncCRESTDriver(AsyncExternalDriver):
 
         nn = mol.name
 
+        ### GENERATE VALENCE ANGLE CONSTRAINTS
+        atoms_constr = []
+        for a in constr_val_angles:
+            atoms_constr.extend(mol.get_atoms_by_symbol(a))
+        cinp = "$constrain\n"
+        cinp += self.gen_angle_constraints(mol, atoms_constr)
+        cinp += "$end\n"
+
         # command that will be used to execute xtb package
-        # _cmd = f"""crest {nn}_g0.xyz -{method} -ewin {ewin:0.4f} -mdlen {mdlen:0.4f} -mddump {mddump:0.4f} -vbdump {vbdump:0.4f} -T {self.nprocs}"""
+        _cmd = f"""crest {nn}_g0.xyz -{method} -quick -ewin {ewin:0.4f} -mdlen {mdlen:0.4f} -mddump {mddump:0.4f} -vbdump {vbdump:0.4f} -T {self.nprocs}"""
 
-        _cmd = f"""crest {nn}_g0.xyz -{method} -ewin {ewin:0.4f} """
+        # append
 
+        if not chk_topo:
+            _cmd += " --noreftopo"
+        
+        if constr_val_angles:
+            _cmd += f" -cinp {nn}_constraint.inp -fc {force_const:0.4f}"
+        
+        ### EXECUTE CREST CODE
         code, files, stdout, stderr = await self.aexec(
             _cmd,
-            inp_files={f"{nn}_g0.xyz": g0_xyz},
+            inp_files={f"{nn}_g0.xyz": g0_xyz, f"{nn}_constraint.inp": cinp},
             out_files=["crest_conformers.xyz"],
         )
 
         try:
             ens1 = files["crest_conformers.xyz"]
-        except Exception as xc:
-            raise xc
+        except:
+            raise FileNotFoundError("crest_conformers.xyz")
 
-        # screen the conformers
-        _cmd1 = f"""crest -screen {nn}_ens1.xyz -{method} -ewin {ewin:0.4f} -T {self.nprocs}"""
+        geoms = [x for x, _, _ in CartesianGeometry.from_xyz(ens1)]
+        mol.embed_conformers(*geoms, mode="w")
+
+        return mol
+
+    async def confomer_screen(
+        self,
+        mol: Molecule,
+        method: str = "gfn2",
+        ewin: float = 6.0,
+    ):
+        """
+        Any conformer ensemble present in a molecule is reoptimized with the selected method, 
+        then pruned and sorted by energies. Useful in eliminating redundancies from deficiencies of GFN-FF, for instance.
+        """
+        nn = mol.name
+        confs = mol.confs_to_multixyz()
+
+        _cmd = f"""crest -screen {nn}_confs.xyz -{method} -ewin {ewin} -T {self.nprocs} """
 
         code, files, stdout, stderr = await self.aexec(
-            _cmd1,
-            inp_files={f"{nn}_ens1.xyz": ens1},
-            out_files=["crest_ensemble.xyz"],
+            _cmd,
+            inp_files={f"{nn}_confs.xyz": confs},
+            out_files=["crest_ensemble.xyz", "crest.energies"]
         )
 
         try:
-            ens2 = files["crest_ensemble.xyz"]
-        except Exception as xc:
-            raise xc
+            ens1 = files["crest_ensemble.xyz"]
+        except:
+            raise FileNotFoundError("crest_ensemble.xyz")
 
-        parsed_ens2 = CartesianGeometry.from_xyz(ens2)
+        geoms = [x for x, _, _ in CartesianGeometry.from_xyz(ens1)]
+        mol.embed_conformers(*geoms, mode="w")
+        return mol
 
-        for geom, _, _ in parsed_ens2:
-            mol.embed_conformers(geom, mode="a")
+        ### ADD CONFORMER PROPERTIES !!! ###
 
-        return len(parsed_ens2)
+        # return (code, files, stdout, stderr) 
 
-        # code, files, stdout, stderr = await self.aexec(
-        #     _cmd,
-        #     inp_files={f"{nn}_g0.xyz": g0_xyz},
-        #     out_files=["crest_conformers.xyz"],
-        # )
+
+
+    @staticmethod
+    def gen_angle_constraints(mol: Molecule, atoms: List[Atom]):
+        """ Generate constraints for all angles where atom is the middle atom """
+        constr = ""
+        for a in atoms:
+            neigbors = mol.get_connected_atoms(a)
+            for a1, a2 in combinations(neigbors, 2):
+                i1 = mol.get_atom_idx(a1) + 1
+                i2 = mol.get_atom_idx(a) + 1
+                i3 = mol.get_atom_idx(a2) + 1
+                angle = mol.get_angle(a1, a, a2) * 180 / pi
+                constr += f"  angle: {i1}, {i2}, {i3}, {angle:0.4f}\n"
+
+        return constr

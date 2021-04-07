@@ -6,7 +6,9 @@ from tempfile import TemporaryDirectory as TempDir, NamedTemporaryFile as TempFi
 import functools
 import os
 from datetime import datetime
-from ..dtypes import CollectionFile, Collection
+from tempfile import mkstemp
+import pickle
+from ..dtypes import CollectionFile, Collection, Molecule
 
 
 class AsyncExternalDriver:
@@ -108,21 +110,19 @@ class AsyncConcurrent:
         self,
         collection: Collection,
         /,
-        scratch_dir: str = "",
-        logfile: str = "",
+        backup_dir: str = "",
+        logfile: str = "out.log",
         update: float = 1.0,
-        timeout: float = 120.0,
+        timeout: float = 600.0,
         concurrent=4,
     ):
         """
-        `scratch_dir` is the directory that will be used for temporary file storage
-
-        `logfile` is the file where brief text results of processing will be stored (use tail -f on Linux to monitor if needed)
-
-        `dumpfile` is the new collection that will be dumped as a result of the processing
+        `scratch_dir` is the directory that will be used for temporary file storage     
+        `logfile` is the file where brief text results of processing will be stored (use tail -f on Linux to monitor if needed)     
+        `dumpfile` is the new collection that will be dumped as a result of the processing      
         """
         self.collection = collection
-        self.scratch_dir = scratch_dir
+        self.backup_dir = backup_dir
         self.logfile = logfile
         self.concurrent = concurrent
         # self._queue: aio.Queue
@@ -137,14 +137,25 @@ class AsyncConcurrent:
             self._queue.put_nowait((i, m))
 
     async def _worker(self, fx: Awaitable):
-        while not self._queue.empty():
+        while True:
             i, mol = await self._queue.get()
             try:
                 res = await aio.wait_for(fx(mol), timeout=self.timeout)
             except Exception as xc:
                 res = xc
-            self._queue.task_done()
-            self._result[i] = res
+                with open(self.logfile, "at") as f:
+                    f.write(f"Error at {mol.name}", str(xc))
+            finally:
+                self._queue.task_done()
+                self._result[i] = res
+
+                if isinstance(res, Molecule):
+                    _, fn = mkstemp(prefix=mol.name, suffix='.xml', dir=self.backup_dir)
+                    with open(fn, "wt") as f:
+                        f.write(res.to_xml())
+
+                    
+                    
 
     def _spawn_workers(self, fx: Awaitable):
         if hasattr(self, "_worker_pool"):
@@ -184,9 +195,9 @@ class AsyncConcurrent:
         self._queue: aio.Queue
         self._construct_queue(self.collection)
         self._spawn_workers(fx)
-
+        
         start = datetime.now()
-        print(f"Starting to process")
+        print(f"Starting to process {self._queue.qsize()} molecules:")
 
         while True:
             try:
@@ -209,14 +220,20 @@ class AsyncConcurrent:
                 sr = s / total
                 e = timed_out + other_err
                 er = e / total
+                if (sr + er) > 0:
+                    eta = start + (datetime.now() - start) / (sr + er)
+                else:
+                    eta = "..."
 
                 print(
-                    f"{datetime.now() - start} --- successful {sr:>6.1%} ({s:>7}) --- failed {er:>6.1%} ({e:>7})"
+                    f"{datetime.now() - start} --- successful {sr:>6.1%} ({s:>7}) --- failed {er:>6.1%} ({e:>7}) --- ETA {eta}"
                 )
-
+                  
+        self._cancel_workers()
         del self._queue
 
         return self._result
+     
 
     def _exec(self, fx: Awaitable):
         return aio.run(self.aexec(fx))

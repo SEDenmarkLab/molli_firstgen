@@ -21,6 +21,10 @@ class Collection:
         self.molecules = molecules
         self.mol_index = [x.name for x in molecules]
 
+    def add(self, m: Molecule):
+        self.molecules.append(m)
+        self.mol_index.append(m.name)
+
     def __len__(self):
         return len(self.molecules)
 
@@ -205,7 +209,7 @@ class CollectionFile:
             # ie if the file is open
             # and the item was not located in the existing collection
             idx = self._meta["idx"].index(item)
-            with self._fstream.open(f"{idx}.xml") as mf:
+            with self._fstream.open(f"{idx+1}.xml") as mf:
                 m = Molecule.from_file(mf)
                 self._collection.add(m)
 

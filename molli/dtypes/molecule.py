@@ -196,8 +196,22 @@ class Molecule:
         return True if self.conformers else False
 
     def get_atom(self, label: Atom | str):
+        """
+            Returns the first atom with matching label
+        """
         # Attempt to do the list index
         return self.atoms[self.get_atom_idx(label)]
+    
+    def get_atoms_by_symbol(self, symbol: str):
+        """
+            Returns all atoms with matching symbol
+        """
+        atoms = []
+        for a in self.atoms:
+            if a.symbol == symbol:
+                atoms.append(a)
+        
+        return atoms
 
     def get_atom_idx(self, label: Atom | str):
         if isinstance(label, Atom):
@@ -367,6 +381,16 @@ class Molecule:
             self.conformers = deepcopy(confs)
         else:
             raise ValueError("Mode can only be 'w' or 'a'")
+    
+    def confs_to_multixyz(self):
+        labels = [x.symbol for x in self.atoms]
+        allxyz = ""
+        for i, conf in enumerate(self.conformers):
+            xyz = conf.to_xyz(labels, f"{self.name}:{i+1}")
+            allxyz += xyz
+        return allxyz
+        
+
 
     @classmethod
     def join(

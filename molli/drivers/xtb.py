@@ -22,6 +22,7 @@ class AsyncXTBDriver(AsyncExternalDriver):
         method: str = "gff",
         crit: str = "normal",
         xtbinp: str = "",
+        maxiter: int = 50,
         in_place: bool = False,
     ):
         """
@@ -33,7 +34,7 @@ class AsyncXTBDriver(AsyncExternalDriver):
         nn = mol.name
 
         # command that will be used to execute xtb package
-        _cmd = f"""xtb {nn}_g0.xyz --{method} --opt {crit} {"--input param.inp" if xtbinp else ""} -P {self.nprocs}"""
+        _cmd = f"""xtb {nn}_g0.xyz --{method} --opt {crit} --cycles {maxiter} {"--input param.inp" if xtbinp else ""} -P {self.nprocs}"""
 
         # pylint: disable=unused-variable
         code, files, stdout, stderr = await self.aexec(
