@@ -16,7 +16,7 @@ class AsyncOpenBabelDriver(AsyncExternalDriver):
 
         # pylint: disable=unused-variable
         code, files, stdin, stdout = await self.aexec(
-            _cmd, inp_files={"source", mol_text}, out_files=["converted"]
+            _cmd, inp_files={"source": mol_text}, out_files=["converted"]
         )
         res = files["converted"]
         return res

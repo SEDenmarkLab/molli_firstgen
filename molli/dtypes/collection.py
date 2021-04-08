@@ -1,13 +1,12 @@
 from __future__ import annotations
 from .molecule import Molecule
 from datetime import datetime
-from typing import List, Callable, Any
+from typing import List, Callable, Any, Awaitable
 import json
 from zipfile import ZipFile
 from itertools import product, combinations_with_replacement
 from multiprocessing import Pool
 import asyncio as aio
-
 
 class Collection:
     """
@@ -53,6 +52,38 @@ class Collection:
 
         return result
 
+    def applyawt(self, aw: Awaitable, timeout=None, show_progress=True, update=1000):
+        """
+        This function is designed to mimic applyfx, but be useful with awaitables.
+        Right now does not support failure handling, this is something
+        """
+        def inner(*args, **kwargs):
+            
+            async def f():
+                results = []
+                L = len(self.mol_index)
+                start = datetime.now()
+                if show_progress:
+                    print(f"\nApplying [{aw.__name__}] to {L} molecules:")
+
+                for i, m in enumerate(self.molecules):
+                        results.append(await aio.wait_for(aw(m, *args, **kwargs), timeout=timeout))
+                        if show_progress and not (i + 1) % update:
+                            print(
+                                f"{i+1:>10} molecules processed ({(i+1)/L:>6.2%}) Total WCT: {datetime.now() - start}",
+                                flush=True,
+                            )
+                    
+                if show_progress:
+                    print(f"Complete! Total WCT: {datetime.now() - start}\n")
+                
+                return results
+            
+            return aio.run(f())
+        
+        return inner
+
+
     def applyfx(self, fx: Callable[[Molecule], Any]):
         """
         An incredibly useful *decorator* that applies a given function to all molecules in the library.
@@ -62,6 +93,8 @@ class Collection:
         if fx returns Molecule objects, they are then assembled in a collection.
         Otherwise, it returns a list.
         """
+
+        
 
         def inner(workers=1, show_progress=True, update=1000):
             result = []

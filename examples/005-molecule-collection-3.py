@@ -10,11 +10,10 @@ collection.to_multixyz("a.xyz")
 # returns a list, not collection!
 
 obabel = ml.OpenBabelDriver("ob", scratch_dir="obabel_tmp")
-concurrent = ml.Concurrent(
-    collection, backup_dir="backup", update=1.0, concurrent=1, timeout=1.0
-)
 
-_preoptimized = concurrent(obabel.hadd_opt)()
+_preoptimized = collection.applyawt(obabel.hadd_opt, show_progress=1)(ff='UFF')
+
+
 # recreate them into molecular collections
 # preoptimized = ml.Collection("your-files-preoptimized", _preoptimized)
 

@@ -135,6 +135,7 @@ class AsyncConcurrent:
         self.update = update
         self.timeout = timeout
         self._result = [None] * len(collection)
+        self._bypassed = 0
 
         if not os.path.isdir(self.backup_dir):
             os.makedirs(self.backup_dir)
@@ -142,18 +143,23 @@ class AsyncConcurrent:
     def _construct_queue(self, collection: Collection):
         self._queue = aio.Queue()
         for i, m in enumerate(collection):
-            self._queue.put_nowait((i, m))
             # THIS IS A STUB CODE FOR RESTARTING CALCULATIONS
-            try:
-                if backed_up := glob(f"{self.backup_dir}/{m.name}.*.xml"):
-                    print(f"Molecule {m.name} has already been done. Reading the file")
+            if backed_up := glob(f"{self.backup_dir}/{m.name}.*.xml"):
+                print(f"Molecule {m.name} has already been done. trying to read the file ", end='')
+                try:
                     res = Molecule.from_xml(backed_up[0])
+                except:
+                    print("... not good. Queuing up.")
+                    self._queue.put_nowait((i, m))
                 else:
-                    raise Exception
-            except:
-                continue
+                    print("... success! Bypassing.")
+                    self._result[i] = res
+                    self._bypassed += 1
             else:
-                self._result[i] = res
+                self._queue.put_nowait((i, m))
+        
+        print(f"=== REQUESTED {len(collection)} :: IN QUEUE {self._queue.qsize()} :: BYPASSED {self._bypassed} ===", flush=True)
+                
 
     async def _worker(self, fx: Awaitable):
         while True:
@@ -164,10 +170,12 @@ class AsyncConcurrent:
 
             try:
                 res = await aio.wait_for(fx(mol), timeout=self.timeout)
+            except KeyboardInterrupt:
+                raise KeyboardInterrupt
+            except aio.TimeoutError as xc:
+                res = xc
             except Exception as xc:
                 res = xc
-                with open(self.logfile, "at") as f:
-                    f.write(f"Error at {mol.name}", str(xc))
             finally:
                 self._queue.task_done()
                 self._result[i] = res
@@ -243,10 +251,14 @@ class AsyncConcurrent:
                 break
             finally:
                 total, success, timed_out, other_err, not_started = self.get_status()
-                s = success
+                b = self._bypassed
+                br = self._bypassed / total
+
+                s = success - b
                 sr = s / total
                 e = timed_out + other_err
                 er = e / total
+                
                 if (sr + er) > 0:
                     eta = start + (datetime.now() - start) / (sr + er)
                 else:
