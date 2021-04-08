@@ -1,9 +1,10 @@
 from ._core import AsyncExternalDriver
 from ..dtypes import Molecule
 
+
 class AsyncOpenBabelDriver(AsyncExternalDriver):
     """
-        Asynchronous version of the OpenBabel driver
+    Asynchronous version of the OpenBabel driver
     """
 
     async def convert(self, mol_text: str, *args, src: str = "pdb", dest: str = "mol2"):
@@ -11,9 +12,13 @@ class AsyncOpenBabelDriver(AsyncExternalDriver):
         Convert string molecule representation into something else.
         Useful argument: '-h' adds hydrogens
         """
-        _cmd = f"obabel -i{src} source -o{dest} dest " + " ".join(args)
-        code, files, stdin, stdout = await self.aexec(_cmd, inp_files={"source", mol_text}, out_files=["dest"]) #pylint: disable=unused-variable
-        res = files["dest"]
+        _cmd = f"obabel -i{src} source -o{dest} -O converted " + " ".join(args)
+
+        # pylint: disable=unused-variable
+        code, files, stdin, stdout = await self.aexec(
+            _cmd, inp_files={"source", mol_text}, out_files=["converted"]
+        )
+        res = files["converted"]
         return res
 
     async def add_hydrogens(self, mol_text, fmt: str = "mol2"):
@@ -35,7 +40,12 @@ class AsyncOpenBabelDriver(AsyncExternalDriver):
         Perform energy minimization of the input structure
         """
         _cmd = f"obminimize -ff {ff} -n {n} -c {c} input.{src}"
-        code, files, stdout, stderr = await self.aexec(_cmd, inp_files={f"input.{src}": mol_text}) #pylint: disable=unused-variable
+
+        # pylint: disable=unused-variable
+        code, files, stdout, stderr = await self.aexec(
+            _cmd, inp_files={f"input.{src}": mol_text}
+        )
+
         return await self.convert(stdout, src="pdb", dest=dest)
 
     async def hadd_opt(
@@ -58,5 +68,5 @@ class AsyncOpenBabelDriver(AsyncExternalDriver):
 
         xyz_h_opt = await self.minimize(mol2_h, src="mol2", dest="xyz", ff=ff, n=n, c=c)
         res.update_geom_from_xyz(xyz_h_opt, assert_single=True)
-        
+
         return res

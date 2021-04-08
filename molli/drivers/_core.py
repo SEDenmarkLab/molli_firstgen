@@ -11,6 +11,7 @@ import pickle
 from ..dtypes import CollectionFile, Collection, Molecule
 from glob import glob
 
+
 class AsyncExternalDriver:
     """
     This driver supports asynchronous programming.
@@ -121,9 +122,9 @@ class AsyncConcurrent:
         concurrent=4,
     ):
         """
-        `scratch_dir` is the directory that will be used for temporary file storage     
-        `logfile` is the file where brief text results of processing will be stored (use tail -f on Linux to monitor if needed)     
-        `dumpfile` is the new collection that will be dumped as a result of the processing      
+        `scratch_dir` is the directory that will be used for temporary file storage
+        `logfile` is the file where brief text results of processing will be stored (use tail -f on Linux to monitor if needed)
+        `dumpfile` is the new collection that will be dumped as a result of the processing
         """
         self.collection = collection
         self.backup_dir = backup_dir
@@ -142,21 +143,24 @@ class AsyncConcurrent:
         self._queue = aio.Queue()
         for i, m in enumerate(collection):
             self._queue.put_nowait((i, m))
+            # THIS IS A STUB CODE FOR RESTARTING CALCULATIONS
+            try:
+                if backed_up := glob(f"{self.backup_dir}/{m.name}.*.xml"):
+                    print(f"Molecule {m.name} has already been done. Reading the file")
+                    res = Molecule.from_xml(backed_up[0])
+                else:
+                    raise Exception
+            except:
+                continue
+            else:
+                self._result[i] = res
 
     async def _worker(self, fx: Awaitable):
         while True:
-            i, mol = await self._queue.get()
-            
-            # THIS IS A STUB CODE FOR RESTARTING CALCULATIONS
             try:
-                if backed_up := glob(f"{self.backup_dir}/{mol.name}.*.xml"):
-                    print(f"Molecule {mol.name} has already been done. Reading the file")
-                    res = Molecule.from_xml(backed_up[0])
+                i, mol = self._queue.get_nowait()
             except:
-                pass
-            else:
-                self._queue.task_done()
-                self._result[i] = res
+                break
 
             try:
                 res = await aio.wait_for(fx(mol), timeout=self.timeout)
@@ -169,21 +173,21 @@ class AsyncConcurrent:
                 self._result[i] = res
 
                 if isinstance(res, Molecule):
-                    _, fn = mkstemp(prefix=f"{mol.name}.", suffix='.xml', dir=self.backup_dir)
+                    _, fn = mkstemp(
+                        prefix=f"{mol.name}.", suffix=".xml", dir=self.backup_dir
+                    )
                     with open(fn, "wt") as f:
                         f.write(res.to_xml())
 
-                    
-                    
-
-    def _spawn_workers(self, fx: Awaitable):
+    def _spawn_workers(self, fx: Awaitable, n=1):
         if hasattr(self, "_worker_pool"):
             raise Exception("")
         else:
             self._worker_pool = []
-            for _ in range(self.concurrent):
-                task = aio.create_task(self._worker(fx))
-                self._worker_pool.append(task)
+
+        for _ in range(n):
+            task = aio.create_task(self._worker(fx))
+            self._worker_pool.append(task)
 
     def _cancel_workers(self):
         for w in self._worker_pool:
@@ -213,8 +217,8 @@ class AsyncConcurrent:
     async def aexec(self, fx: Awaitable):
         self._queue: aio.Queue
         self._construct_queue(self.collection)
-        self._spawn_workers(fx)
-        
+        self._spawn_workers(fx, self.concurrent)
+
         start = datetime.now()
         print(f"Starting to process {self._queue.qsize()} molecules:")
 
@@ -222,7 +226,11 @@ class AsyncConcurrent:
             try:
                 await aio.wait_for(self._queue.join(), timeout=self.update)
             except aio.TimeoutError:
-                pass
+                # check if tasks are doing okay
+                for w in self._worker_pool:
+                    if w.cancelled() and self._queue.qsize():
+                        print("Ghost worker was replaced with a newly spawned one.")
+                        self._spawn_workers(fx, n=1)
             except aio.CancelledError:
                 print("One or more of the workers was cancelled. Exiting...")
                 self._cancel_workers()
@@ -245,14 +253,14 @@ class AsyncConcurrent:
                     eta = "..."
 
                 print(
-                    f"{datetime.now() - start} --- successful {sr:>6.1%} ({s:>7}) --- failed {er:>6.1%} ({e:>7}) --- ETA {eta}"
+                    f"{datetime.now() - start} --- successful {sr:>6.1%} ({s:>7}) --- failed {er:>6.1%} ({e:>7}) --- ETA {eta}",
+                    flush=True,
                 )
-                  
+
         self._cancel_workers()
         del self._queue
 
         return self._result
-     
 
     def _exec(self, fx: Awaitable):
         return aio.run(self.aexec(fx))

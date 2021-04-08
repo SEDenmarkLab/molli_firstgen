@@ -15,7 +15,7 @@ def dist(a, b):
     return np.sqrt(np.sum((np.array(a) - np.array(b)) ** 2))
 
 
-def split_cdxml(file_path: str, enum=False) -> Collection:
+def split_cdxml(file_path: str, enum=False, fmt="m{idx}") -> Collection:
     """
     Split a single cdxml file into a collection of molecules
     """
@@ -128,7 +128,7 @@ def split_cdxml(file_path: str, enum=False) -> Collection:
             bonds.append(bond)
 
         if enum:
-            mol_name = str(nf)
+            mol_name = fmt.format(idx=nf)
         else:
             closest = np.argmin([dist(frag_centroid, x) for x in label_coord])
             mol_name = labels[closest]

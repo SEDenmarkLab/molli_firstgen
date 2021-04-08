@@ -5,6 +5,7 @@
 **/*.xyz
 **/*.html
 **/*.zip
+**/*.cdxml
 .vscode/
 molli.egg-info/
 **/__pycache__

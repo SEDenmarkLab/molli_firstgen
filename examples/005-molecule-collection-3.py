@@ -3,21 +3,23 @@
 
 import molli as ml
 
-collection = ml.parsing.split_cdxml("ac-1.cdxml", enum=True)
+collection = ml.parsing.split_cdxml("ac1.cdxml", enum=True)
 
+collection.to_multixyz("a.xyz")
 # add hydrogens and perform a crude optimization
 # returns a list, not collection!
 
-obabel = ml.OpenBabelDriver("ob", scratch_dir="obabel_tmp/")
-concurrent = ml.Concurrent(collection, backup_dir="backup/", update=5, concurrent=4)
+obabel = ml.OpenBabelDriver("ob", scratch_dir="obabel_tmp")
+concurrent = ml.Concurrent(
+    collection, backup_dir="backup", update=1.0, concurrent=1, timeout=1.0
+)
 
-_preoptimized = concurrent(obabel.hadd_opt)(ff="UFF1111")
-
+_preoptimized = concurrent(obabel.hadd_opt)()
 # recreate them into molecular collections
-preoptimized = ml.Collection("your-files-preoptimized", _preoptimized)
+# preoptimized = ml.Collection("your-files-preoptimized", _preoptimized)
 
-preoptimized.to_zip("preopt.zip")
+# preoptimized.to_zip("preopt.zip")
 
-for mol in preoptimized:
-	with open(f"{mol.name}.mol2", "wt") as f:
-		f.write(mol.to_mol2())
+# for mol in preoptimized:
+#     with open(f"{mol.name}.mol2", "wt") as f:
+#         f.write(mol.to_mol2())
