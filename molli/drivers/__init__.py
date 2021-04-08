@@ -11,3 +11,5 @@ from ._core import AsyncConcurrent as Concurrent
 # from .obabel import OpenBabelDriver
 from .xtb import AsyncXTBDriver as XTBDriver
 from .crest import AsyncCRESTDriver as CRESTDriver
+from .obabel import AsyncOpenBabelDriver as OpenBabelDriver
+

@@ -15,7 +15,7 @@ def dist(a, b):
     return np.sqrt(np.sum((np.array(a) - np.array(b)) ** 2))
 
 
-def split_cdxml(file_path: str) -> Collection:
+def split_cdxml(file_path: str, enum=False) -> Collection:
     """
     Split a single cdxml file into a collection of molecules
     """
@@ -40,27 +40,28 @@ def split_cdxml(file_path: str) -> Collection:
 
     textboxes = rt.findall("./*/t") + rt.findall("./*/group/t")
 
-    assert len(fragments) == len(
-        textboxes
-    ), f"Received {len(fragments)} fragments and {len(textboxes)} tboxes"
+    if not enum:
+        assert len(fragments) == len(
+            textboxes
+        ), f"Received {len(fragments)} fragments and {len(textboxes)} tboxes"
 
-    # Extract labels and coordinates of said labels
-    # Coordinates are required to assign labels to correct coordinates
+        # Extract labels and coordinates of said labels
+        # Coordinates are required to assign labels to correct coordinates
 
-    labels = []
-    label_coord = []
+        labels = []
+        label_coord = []
 
-    for tb in textboxes:
-        l, t, r, b = parse_pos(tb.attrib["BoundingBox"])
-        label_coord.append([(r + l) / 2, (b + t) / 2])
-        labels.append(tb.find("./s").text)
+        for tb in textboxes:
+            l, t, r, b = parse_pos(tb.attrib["BoundingBox"])
+            label_coord.append([(r + l) / 2, (b + t) / 2])
+            labels.append(tb.find("./s").text)
 
     # Iterate over fragments
     # Convert 2d geometry to Molecule files
 
     molecules = []
 
-    for frag in fragments:
+    for nf, frag in enumerate(fragments):
 
         l, t, r, b = parse_pos(frag.attrib["BoundingBox"])
         frag_centroid = [(r + l) / 2, (b + t) / 2]
@@ -126,8 +127,11 @@ def split_cdxml(file_path: str) -> Collection:
             bond = Bond(atoms[atom_ids.index(id1)], atoms[atom_ids.index(id2)], bt)
             bonds.append(bond)
 
-        closest = np.argmin([dist(frag_centroid, x) for x in label_coord])
-        mol_name = labels[closest]
+        if enum:
+            mol_name = str(nf)
+        else:
+            closest = np.argmin([dist(frag_centroid, x) for x in label_coord])
+            mol_name = labels[closest]
 
         mol = Molecule(mol_name, atoms=atoms, bonds=bonds, geom=CartesianGeometry(geom))
         mol.fix_geom()

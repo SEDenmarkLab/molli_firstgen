@@ -10,11 +10,9 @@ import os
 
 setup(
     name="molli",
-    packages=[
-        "molli",
-    ],
+    packages=find_packages(exclude=("__pycache__", )),
     data_files=[],
-    version="0.1.1",
+    version="0.1.2",
     author="Alexander S. Shved",
     author_email="shvedalx@illinois.edu",
     install_requires=[

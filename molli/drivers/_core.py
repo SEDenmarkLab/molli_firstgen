@@ -9,7 +9,7 @@ from datetime import datetime
 from tempfile import mkstemp
 import pickle
 from ..dtypes import CollectionFile, Collection, Molecule
-
+from glob import glob
 
 class AsyncExternalDriver:
     """
@@ -32,6 +32,9 @@ class AsyncExternalDriver:
         self.encoding = encoding
         self.prefix = f"{self.__class__.PREFIX}.{name}."
 
+        if not os.path.isdir(scratch_dir):
+            os.makedirs(scratch_dir)
+
     async def aexec(
         self, cmd: str, inp_files: Dict[str, str] = dict(), out_files: List[str] = []
     ):
@@ -39,6 +42,7 @@ class AsyncExternalDriver:
         Coroutine that asynchronously schedules a shell command to be executed
         Before the command is executed it writes temporary files (`inp_files`)
         After the command is executed, output files are harvested (`out_files`)
+        returns: code, files, stdout, stderr
         """
 
         with TempDir(prefix=self.prefix, dir=self.scratch_dir) as td:
@@ -131,6 +135,9 @@ class AsyncConcurrent:
         self.timeout = timeout
         self._result = [None] * len(collection)
 
+        if not os.path.isdir(self.backup_dir):
+            os.makedirs(self.backup_dir)
+
     def _construct_queue(self, collection: Collection):
         self._queue = aio.Queue()
         for i, m in enumerate(collection):
@@ -139,6 +146,18 @@ class AsyncConcurrent:
     async def _worker(self, fx: Awaitable):
         while True:
             i, mol = await self._queue.get()
+            
+            # THIS IS A STUB CODE FOR RESTARTING CALCULATIONS
+            try:
+                if backed_up := glob(f"{self.backup_dir}/{mol.name}.*.xml"):
+                    print(f"Molecule {mol.name} has already been done. Reading the file")
+                    res = Molecule.from_xml(backed_up[0])
+            except:
+                pass
+            else:
+                self._queue.task_done()
+                self._result[i] = res
+
             try:
                 res = await aio.wait_for(fx(mol), timeout=self.timeout)
             except Exception as xc:
@@ -150,7 +169,7 @@ class AsyncConcurrent:
                 self._result[i] = res
 
                 if isinstance(res, Molecule):
-                    _, fn = mkstemp(prefix=mol.name, suffix='.xml', dir=self.backup_dir)
+                    _, fn = mkstemp(prefix=f"{mol.name}.", suffix='.xml', dir=self.backup_dir)
                     with open(fn, "wt") as f:
                         f.write(res.to_xml())
 
