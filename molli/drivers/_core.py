@@ -119,12 +119,14 @@ class AsyncConcurrent:
         logfile: str = "out.log",
         update: float = 1.0,
         timeout: float = 600.0,
+        qsize=None,
         concurrent=4,
     ):
         """
         `scratch_dir` is the directory that will be used for temporary file storage
         `logfile` is the file where brief text results of processing will be stored (use tail -f on Linux to monitor if needed)
         `dumpfile` is the new collection that will be dumped as a result of the processing
+        `reset`: reset the workers every so often to make sure that there are no unexpected crashes
         """
         self.collection = collection
         self.backup_dir = backup_dir
@@ -134,6 +136,7 @@ class AsyncConcurrent:
         # self._construct_queue(self.collection)
         self.update = update
         self.timeout = timeout
+        self.qsize = qsize
         self._result = [None] * len(collection)
         self._bypassed = 0
 
@@ -145,14 +148,14 @@ class AsyncConcurrent:
         for i, m in enumerate(collection):
             # THIS IS A STUB CODE FOR RESTARTING CALCULATIONS
             if backed_up := glob(f"{self.backup_dir}/{m.name}.*.xml"):
-                print(f"Molecule {m.name} has already been done. trying to read the file ", end='')
+                # print(f"Molecule {m.name} has already been done. trying to read the file ", end='')
                 try:
                     res = Molecule.from_xml(backed_up[0])
                 except:
-                    print("... not good. Queuing up.")
+                    # print("... not good. Queuing up.")
                     self._queue.put_nowait((i, m))
                 else:
-                    print("... success! Bypassing.")
+                    # print("... success! Bypassing.")
                     self._result[i] = res
                     self._bypassed += 1
             else:
@@ -233,20 +236,14 @@ class AsyncConcurrent:
         while True:
             try:
                 await aio.wait_for(self._queue.join(), timeout=self.update)
+
             except aio.TimeoutError:
                 # check if tasks are doing okay
                 for w in self._worker_pool:
                     if w.cancelled() and self._queue.qsize():
                         print("Ghost worker was replaced with a newly spawned one.")
-                        self._spawn_workers(fx, n=1)
-            except aio.CancelledError:
-                print("One or more of the workers was cancelled. Exiting...")
-                self._cancel_workers()
-                break
-            except KeyboardInterrupt:
-                print("User interrupted the script. Exiting...")
-                self._cancel_workers()
-                break
+                        await aio.sleep(10)
+                        self._spawn_workers(fx, n=1)            
             else:
                 break
             finally:
@@ -255,9 +252,9 @@ class AsyncConcurrent:
                 br = self._bypassed / total
 
                 s = success - b
-                sr = s / total
+                sr = s / (total - b)
                 e = timed_out + other_err
-                er = e / total
+                er = e / (total - b)
                 
                 if (sr + er) > 0:
                     eta = start + (datetime.now() - start) / (sr + er)

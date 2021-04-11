@@ -5,7 +5,7 @@ Molecular Toolbox Library
 (c) Alexander S. Shved and the Denmark laboratory
 """
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 from . import _config
 from . import dtypes
