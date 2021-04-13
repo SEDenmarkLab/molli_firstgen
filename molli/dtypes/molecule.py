@@ -65,7 +65,6 @@ class Atom:
     def set_attachment_point(self, v: bool = True):
         self.ap = v
 
-
 class Bond:
     """
     Chemical bond
@@ -91,7 +90,27 @@ class Bond:
     def __repr__(self):
         return f"Bond ({self.bond_type}) {self.a1}-{self.a2}"
 
+class Fragment:
+    """
+        This class is not defined yet
+    """
+    ...
 
+class Property:
+    """
+    Any property that can be attributable to a whole molecule / atom / bond / conformer
+    """
+    def __init__(self, ref, ptype: str, value: str, source: str = ""):
+        self.ref = ref
+        # check reference object for type
+        if not isinstance(ref, (Atom, Bond, Fragment, CartesianGeometry, Molecule)):
+            raise NotImplementedError("Reference must be an object in (Atom, Bond, Fragment, CartesianGeometry, Molecule)")
+
+        self.ptype = ptype
+        self.value = value
+        self.source = source
+        
+        
 def structure_clone(atoms: List[Atom], bonds: List[Bond]) -> (List[Atom], List[Bond]):
     """
     This functions allows deep copying of atoms and bonds, keeping the connectivity table intact
@@ -388,6 +407,14 @@ class Molecule:
         for i, conf in enumerate(self.conformers):
             xyz = conf.to_xyz(labels, f"{self.name}:{i+1}")
             allxyz += xyz
+        return allxyz
+    
+    def confs_to_xyzs(self):
+        labels = [x.symbol for x in self.atoms]
+        allxyz = []
+        for i, conf in enumerate(self.conformers):
+            xyz = conf.to_xyz(labels, f"{self.name}:{i+1}")
+            allxyz.append(xyz)
         return allxyz
         
 

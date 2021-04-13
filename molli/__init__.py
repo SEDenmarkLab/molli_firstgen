@@ -20,4 +20,4 @@ from . import workflows
 # NOTE: This list is subject to changes without notification
 
 from .dtypes import Molecule, Collection, CollectionFile
-from .drivers import XTBDriver, CRESTDriver, OpenBabelDriver, Concurrent  # CRESTDriver, OpenBabelDriver
+from .drivers import XTBDriver, CRESTDriver, OpenBabelDriver, ORCADriver,  Concurrent  # CRESTDriver, OpenBabelDriver

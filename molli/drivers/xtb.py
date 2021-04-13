@@ -8,7 +8,7 @@ from typing import List, Callable
 from math import ceil, pi
 from itertools import combinations
 import asyncio as aio
-
+import re
 
 class AsyncXTBDriver(AsyncExternalDriver):
     def __init__(self, name="", scratch_dir="", nprocs=1, encoding="utf8"):
@@ -109,6 +109,22 @@ class AsyncXTBDriver(AsyncExternalDriver):
         )
 
         return m1
+
+    async def conformer_energies(self, mol: Molecule, method: str='gfn2', accuracy:float=1.0):
+        xyzs = mol.confs_to_xyzs()
+        nn = mol.name
+        energies = []
+        for i, xyz in enumerate(xyzs):
+            _cmd = f"""xtb {nn}.{i}.xyz --{method} --acc {accuracy:0.2f}"""
+            code, files, stdout, stderr = await self.aexec(_cmd, inp_files={f"{nn}.{i}.xyz": xyz})
+
+            # | TOTAL ENERGY             -172.541095318001 Eh   |
+            
+            for l in stdout.split('\n')[::-1]:
+                if m := re.match(r"\s+\|\s+TOTAL ENERGY\s+(?P<eh>[0-9.-]+)\s+Eh\s+\|.*", l):
+                    energies.append(float(m['eh']))
+
+        return energies
 
     @staticmethod
     def gen_bond_constraints(mol: Molecule, bonds: List[Bond]):

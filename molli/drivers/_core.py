@@ -54,7 +54,7 @@ class AsyncExternalDriver:
 
             proc = await aio.create_subprocess_shell(_cmd, stdout=PIPE, stderr=PIPE)
             code = await proc.wait()
-
+            
             _out = await proc.stdout.read()
             _err = await proc.stdout.read()
 
@@ -62,6 +62,16 @@ class AsyncExternalDriver:
             stderr = _err.decode(self.encoding)
 
             files = self.getfiles(td, out_files)
+
+            if code:
+                td_base = os.path.basename(td)
+                with open(f"{self.scratch_dir}/{td_base}_dump_stdout.log", "wt") as f:
+                    f.write(stdout) 
+                with open(f"{self.scratch_dir}/{td_base}_dump_stderr.log", "wt") as f:
+                    f.write(stderr)
+                    for fout in inp_files:
+                        f.write(f"\n\n === {fout} ===\n\n")
+                        f.write(inp_files[fout])     
 
         return code, files, stdout, stderr
 

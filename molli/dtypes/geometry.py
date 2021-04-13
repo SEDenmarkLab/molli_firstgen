@@ -211,7 +211,7 @@ class CartesianGeometry:
 
         if len(parsed) == 1:
             coord, atoms, cmt = parsed[0]
-            return cls(coord=coord), atoms, cmt
+            return [(cls(coord=coord), atoms, cmt)]
 
         elif len(parsed) < 1:
             raise SyntaxError

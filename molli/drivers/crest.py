@@ -85,25 +85,27 @@ class AsyncCRESTDriver(AsyncExternalDriver):
         nn = mol.name
         confs = mol.confs_to_multixyz()
 
-        _cmd = f"""crest -screen {nn}_confs.xyz -{method} -ewin {ewin} -T {self.nprocs} """
+        _cmd = f"""crest -screen {nn}_confs.xyz -{method} -ewin {ewin} -cbonds -fc 0.5 -T {self.nprocs} """
 
         code, files, stdout, stderr = await self.aexec(
             _cmd,
             inp_files={f"{nn}_confs.xyz": confs},
             out_files=["crest_ensemble.xyz", "crest.energies"]
         )
+        
+        ens1 = files["crest_ensemble.xyz"]
+        nrgs1 = files["crest.energies"]
 
-        try:
-            ens1 = files["crest_ensemble.xyz"]
-        except:
-            raise FileNotFoundError("crest_ensemble.xyz")
+        energies = [float(x) for x in nrgs1.split("\n")]
 
         geoms = [x for x, _, _ in CartesianGeometry.from_xyz(ens1)]
-        mol.embed_conformers(*geoms, mode="w")
-        return mol
+
+        _mol = deepcopy(mol)
+
+        _mol.embed_conformers(*geoms, mode="w")
+        return _mol
 
         ### ADD CONFORMER PROPERTIES !!! ###
-
         # return (code, files, stdout, stderr) 
 
 
