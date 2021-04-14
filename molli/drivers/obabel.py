@@ -15,10 +15,18 @@ class AsyncOpenBabelDriver(AsyncExternalDriver):
         _cmd = f"obabel -i{src} source -o{dest} -O converted " + " ".join(args)
 
         # pylint: disable=unused-variable
-        code, files, stdin, stdout = await self.aexec(
-            _cmd, inp_files={"source": mol_text}, out_files=["converted"]
+        code, files, stdout, stderr = await self.aexec(
+            _cmd, inp_files={f"source": mol_text}, out_files=[f"converted"]
         )
-        res = files["converted"]
+
+        try:
+            res = files[f"converted"]
+        except:
+            print(stderr)
+            print(stdout)
+            print(files)
+            raise
+
         return res
 
     async def add_hydrogens(self, mol_text, fmt: str = "mol2"):
@@ -48,9 +56,7 @@ class AsyncOpenBabelDriver(AsyncExternalDriver):
 
         return await self.convert(stdout, src="pdb", dest=dest)
 
-    async def hadd_opt(
-        self, mol: Molecule, ff="UFF", n=500, c=1e-4, update_source=True
-    ) -> Molecule:
+    async def hadd_opt(self, mol: Molecule, ff="UFF", n=500, c=1e-4) -> Molecule:
         """
         Take a Molecule instance, add hydrogens and do preliminary optimization.
         If conformers are present, they are ignored in this version.
