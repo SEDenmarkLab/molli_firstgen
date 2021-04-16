@@ -54,7 +54,7 @@ class AsyncExternalDriver:
 
             proc = await aio.create_subprocess_shell(_cmd, stdout=PIPE, stderr=PIPE)
             code = await proc.wait()
-            
+
             _out = await proc.stdout.read()
             _err = await proc.stdout.read()
 
@@ -66,12 +66,12 @@ class AsyncExternalDriver:
             if code:
                 td_base = os.path.basename(td)
                 with open(f"{self.scratch_dir}/{td_base}_dump_stdout.log", "wt") as f:
-                    f.write(stdout) 
+                    f.write(stdout)
                 with open(f"{self.scratch_dir}/{td_base}_dump_stderr.log", "wt") as f:
                     f.write(stderr)
                     for fout in inp_files:
                         f.write(f"\n\n === {fout} ===\n\n")
-                        f.write(inp_files[fout])     
+                        f.write(inp_files[fout])
 
         return code, files, stdout, stderr
 
@@ -170,9 +170,11 @@ class AsyncConcurrent:
                     self._bypassed += 1
             else:
                 self._queue.put_nowait((i, m))
-        
-        print(f"=== REQUESTED {len(collection)} :: IN QUEUE {self._queue.qsize()} :: BYPASSED {self._bypassed} ===", flush=True)
-                
+
+        print(
+            f"=== REQUESTED {len(collection)} :: IN QUEUE {self._queue.qsize()} :: BYPASSED {self._bypassed} ===",
+            flush=True,
+        )
 
     async def _worker(self, fx: Awaitable):
         while True:
@@ -253,7 +255,7 @@ class AsyncConcurrent:
                     if w.cancelled() and self._queue.qsize():
                         print("Ghost worker was replaced with a newly spawned one.")
                         await aio.sleep(10)
-                        self._spawn_workers(fx, n=1)            
+                        self._spawn_workers(fx, n=1)
             else:
                 break
             finally:
@@ -265,7 +267,7 @@ class AsyncConcurrent:
                 sr = s / (total - b)
                 e = timed_out + other_err
                 er = e / (total - b)
-                
+
                 if (sr + er) > 0:
                     eta = start + (datetime.now() - start) / (sr + er)
                 else:
