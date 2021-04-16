@@ -286,14 +286,21 @@ class Molecule:
 
         return atoms
 
-    def get_subgeom(self, atoms: List[Atom]):
+    def get_subgeom(self, atoms: List[Atom], conformer=-1):
         """
         Return a subset of atomic position
+        if conformer = -1: return default geometry
+        if integer >= 0: return subgeometry of conformer with that index
         """
         subgeom = []
-        for a in atoms:
-            c = self.geom.get_coord(self.get_atom_idx(a))
-            subgeom.append(c)
+        if conformer == -1:
+            for a in atoms:
+                c = self.geom.get_coord(self.get_atom_idx(a))
+                subgeom.append(c)
+        else:
+            for a in atoms:
+                c = self.conformers[conformer].get_coord(self.get_atom_idx(a))
+                subgeom.append(c)
 
         return CartesianGeometry(subgeom)
 
@@ -416,7 +423,24 @@ class Molecule:
             xyz = conf.to_xyz(labels, f"{self.name}:{i+1}")
             allxyz.append(xyz)
         return allxyz
+    
+    def remove_atoms(self, *atoms: Atom):
+        """
+        Remove selected atoms from the molecule.
+        Also deletes all bonds to and between selected atoms, and the respective coordinates.
+        """
+        for a in atoms:
+            for b in self.get_bonds_with_atom(a):
+                self.bonds.remove(b)
+                
+            aidx = self.get_atom_idx(a)
+            self.geom.delete(aidx)
+            for conf in self.conformers:
+                conf.delete(aidx)
+
+            self.atoms.remove(a)
         
+
 
 
     @classmethod

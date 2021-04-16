@@ -6,6 +6,7 @@ from glob import glob
 from warnings import warn
 from typing import List, Callable
 from math import ceil, pi
+import numpy as np
 from itertools import combinations
 import asyncio as aio
 import re
@@ -110,21 +111,34 @@ class AsyncXTBDriver(AsyncExternalDriver):
 
         return m1
 
+    async def xyz_energy(self, xyz: str, method: str='gfn2', accuracy: float = 1.0):
+        _cmd = f"""xtb struct.xyz --{method} --acc {accuracy:0.2f}"""
+
+        code, files, stdout, stderr = await self.aexec(_cmd, inp_files={f"struct.xyz": xyz})
+        
+        # This is what we are trying to find in the output file
+        # | TOTAL ENERGY             -172.541095318001 Eh   |
+
+        for l in stdout.split('\n')[::-1]:
+            if m := re.match(r"\s+\|\s+TOTAL ENERGY\s+(?P<eh>[0-9.-]+)\s+Eh\s+\|.*", l):
+                return float(m['eh'])
+
     async def conformer_energies(self, mol: Molecule, method: str='gfn2', accuracy:float=1.0):
+        """
+        Returns relative conformer energies in kJ/mol
+        The relative energies are referenced to the first conformer
+        """
         xyzs = mol.confs_to_xyzs()
         nn = mol.name
         energies = []
+
         for i, xyz in enumerate(xyzs):
-            _cmd = f"""xtb {nn}.{i}.xyz --{method} --acc {accuracy:0.2f}"""
-            code, files, stdout, stderr = await self.aexec(_cmd, inp_files={f"{nn}.{i}.xyz": xyz})
-
-            # | TOTAL ENERGY             -172.541095318001 Eh   |
-            
-            for l in stdout.split('\n')[::-1]:
-                if m := re.match(r"\s+\|\s+TOTAL ENERGY\s+(?P<eh>[0-9.-]+)\s+Eh\s+\|.*", l):
-                    energies.append(float(m['eh']))
-
-        return energies
+            conf_energy = await self.xyz_energy(xyz, method=method, accuracy=accuracy)
+            energies.append(conf_energy)
+        
+        ref_energy = energies[0]
+          
+        return (np.array(energies) - ref_energy)*2625.5 # conversion to kJ/mol
 
     @staticmethod
     def gen_bond_constraints(mol: Molecule, bonds: List[Bond]):

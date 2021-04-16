@@ -227,7 +227,7 @@ class AsyncConcurrent:
                 timed_out += 1
             elif isinstance(x, Exception):
                 other_err += 1
-            elif x == None:
+            elif x is None:
                 not_started += 1
             else:
                 success += 1

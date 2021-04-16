@@ -9,6 +9,21 @@ from math import ceil, pi
 from itertools import combinations
 import asyncio as aio
 
+def _parse_energies(_n: str):
+    """
+        Parse energies in the form of
+        1   0.000
+        2   1.131
+    """
+    energies = []
+    for l in _n.splitlines(keepends=False):
+        if l:
+            e = float(l.split()[1])
+            energies.append(e)
+    
+    return energies
+
+
 
 class AsyncCRESTDriver(AsyncExternalDriver):
     # def __init__(self, name="", scratch_dir="", nprocs=1, encoding="utf8"):
@@ -85,7 +100,7 @@ class AsyncCRESTDriver(AsyncExternalDriver):
         nn = mol.name
         confs = mol.confs_to_multixyz()
 
-        _cmd = f"""crest -screen {nn}_confs.xyz -{method} -ewin {ewin} -cbonds -fc 0.5 -T {self.nprocs} """
+        _cmd = f"""crest -screen {nn}_confs.xyz -{method} -ewin {ewin} -T {self.nprocs} """
 
         code, files, stdout, stderr = await self.aexec(
             _cmd,
@@ -95,8 +110,6 @@ class AsyncCRESTDriver(AsyncExternalDriver):
         
         ens1 = files["crest_ensemble.xyz"]
         nrgs1 = files["crest.energies"]
-
-        energies = [float(x) for x in nrgs1.split("\n")]
 
         geoms = [x for x, _, _ in CartesianGeometry.from_xyz(ens1)]
 
