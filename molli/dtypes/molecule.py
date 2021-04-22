@@ -65,6 +65,7 @@ class Atom:
     def set_attachment_point(self, v: bool = True):
         self.ap = v
 
+
 class Bond:
     """
     Chemical bond
@@ -90,27 +91,33 @@ class Bond:
     def __repr__(self):
         return f"Bond ({self.bond_type}) {self.a1}-{self.a2}"
 
+
 class Fragment:
     """
-        This class is not defined yet
+    This class is not defined yet
     """
+
     ...
+
 
 class Property:
     """
     Any property that can be attributable to a whole molecule / atom / bond / conformer
     """
+
     def __init__(self, ref, ptype: str, value: str, source: str = ""):
         self.ref = ref
         # check reference object for type
         if not isinstance(ref, (Atom, Bond, Fragment, CartesianGeometry, Molecule)):
-            raise NotImplementedError("Reference must be an object in (Atom, Bond, Fragment, CartesianGeometry, Molecule)")
+            raise NotImplementedError(
+                "Reference must be an object in (Atom, Bond, Fragment, CartesianGeometry, Molecule)"
+            )
 
         self.ptype = ptype
         self.value = value
         self.source = source
-        
-        
+
+
 def structure_clone(atoms: List[Atom], bonds: List[Bond]) -> (List[Atom], List[Bond]):
     """
     This functions allows deep copying of atoms and bonds, keeping the connectivity table intact
@@ -216,20 +223,20 @@ class Molecule:
 
     def get_atom(self, label: Atom | str):
         """
-            Returns the first atom with matching label
+        Returns the first atom with matching label
         """
         # Attempt to do the list index
         return self.atoms[self.get_atom_idx(label)]
-    
+
     def get_atoms_by_symbol(self, symbol: str):
         """
-            Returns all atoms with matching symbol
+        Returns all atoms with matching symbol
         """
         atoms = []
         for a in self.atoms:
             if a.symbol == symbol:
                 atoms.append(a)
-        
+
         return atoms
 
     def get_atom_idx(self, label: Atom | str):
@@ -407,7 +414,7 @@ class Molecule:
             self.conformers = deepcopy(confs)
         else:
             raise ValueError("Mode can only be 'w' or 'a'")
-    
+
     def confs_to_multixyz(self):
         labels = [x.symbol for x in self.atoms]
         allxyz = ""
@@ -415,7 +422,7 @@ class Molecule:
             xyz = conf.to_xyz(labels, f"{self.name}:{i+1}")
             allxyz += xyz
         return allxyz
-    
+
     def confs_to_xyzs(self):
         labels = [x.symbol for x in self.atoms]
         allxyz = []
@@ -423,7 +430,42 @@ class Molecule:
             xyz = conf.to_xyz(labels, f"{self.name}:{i+1}")
             allxyz.append(xyz)
         return allxyz
-    
+
+    def confs_to_molecules(self, name_fmt="{name}_cf{n}"):
+        mols = []
+        for cn, cg in enumerate(self.conformers):
+            name = name_fmt.format(name=self.name, n=cn)
+            m = Molecule(name, self.atoms, self.bonds, cg, clone=True)
+            mols.append(m)
+
+        return mols
+
+    def confs_to_mol2_files(self, path="", name_fmt="{name}_cf{n}"):
+        """
+        This function exports all conformers from current molecule file into mol2 files.
+
+        `path`: directory into which they should be exported.
+            Will be created if not existent!
+
+        `name_fmt`: name formatter. Accepts the following variables:
+            - `{name}`: molecule name
+            - `{n}`: conformer number (conformers will be numcered starting with 0)
+
+        """
+        # check if the folder exists and create if needed
+        if not os.path.isdir(path):
+            os.makedirs(path)
+
+        if self.conformers:
+            for m in self.confs_to_molecules(name_fmt=name_fmt):
+
+                fn = os.path.normpath(os.path.join(path, f"{m.name}.mol2"))
+
+                with open(fn, "wt") as f:
+                    f.write(m.to_mol2())
+        else:
+            print(f"{self.name}: no conformers to export")
+
     def remove_atoms(self, *atoms: Atom):
         """
         Remove selected atoms from the molecule.
@@ -432,16 +474,13 @@ class Molecule:
         for a in atoms:
             for b in self.get_bonds_with_atom(a):
                 self.bonds.remove(b)
-                
+
             aidx = self.get_atom_idx(a)
             self.geom.delete(aidx)
             for conf in self.conformers:
                 conf.delete(aidx)
 
             self.atoms.remove(a)
-        
-
-
 
     @classmethod
     def join(
