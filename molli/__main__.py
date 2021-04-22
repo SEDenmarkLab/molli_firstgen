@@ -13,9 +13,11 @@ if len(argv) > 1:
         try:
             mod = import_module(f"molli.workflows.{wf}")
             mod.main(argv[2:])
-        except:
+        except ImportError:
             print(f"Failed to import {wf}")
-            raise
+        except Exception as xc:
+            print("Error in module runtime")
+            raise xc
     else:
         print("Error: workflow not recognized.")
         print("List of available workflows:")

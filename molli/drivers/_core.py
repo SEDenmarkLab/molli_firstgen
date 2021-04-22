@@ -166,8 +166,11 @@ class AsyncConcurrent:
                     self._queue.put_nowait((i, m))
                 else:
                     # print("... success! Bypassing.")
-                    self._result[i] = res
-                    self._bypassed += 1
+                    if len(res.conformers):
+                        self._result[i] = res
+                        self._bypassed += 1
+                    else:
+                        self._queue.put_nowait((i, m))
             else:
                 self._queue.put_nowait((i, m))
         
