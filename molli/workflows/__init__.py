@@ -5,5 +5,7 @@
 # UPDATE __ALL__ TO MAKE FUNCTION AVAILABLE TO THE PUBLIC
 __all__ = [
     "compile",
-    "show"
+    "show",
+    "subset",
+    "editman"
 ]

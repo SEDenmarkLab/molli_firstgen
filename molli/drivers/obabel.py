@@ -76,3 +76,16 @@ class AsyncOpenBabelDriver(AsyncExternalDriver):
         res.update_geom_from_xyz(xyz_h_opt, assert_single=True)
 
         return res
+    
+    async def optimize(self, mol: Molecule, ff="UFF", n=500, c=1e-4) -> Molecule:
+        """
+        Same as minimize, but takes a molecule instance
+        """
+
+        mol2 = mol.to_mol2()
+        optimized = await self.minimize(mol_text=mol2, src="mol2", dest="mol2", ff=ff, n=n, c=c)
+
+        newmol = Molecule.from_mol2(optimized)
+        newmol.name = mol.name
+
+        return newmol

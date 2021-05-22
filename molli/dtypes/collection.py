@@ -23,6 +23,10 @@ class Collection:
     def add(self, m: Molecule):
         self.molecules.append(m)
         self.mol_index.append(m.name)
+    
+    def extend(self, c: Collection):
+        for m in c:
+            self.add(m)
 
     def __len__(self):
         return len(self.molecules)
@@ -162,6 +166,21 @@ class Collection:
                 meta["files"].append(f"{i+1}.xml")
 
             zf.writestr("__molli__", json.dumps(meta))
+
+    @classmethod
+    def merge(cls, *collections: Collection, name="merged"):
+        """
+        Self-explanatory 
+        """
+        res = cls(name=name)
+
+        for c in collections:
+            res.extend(c)
+        
+        return res
+
+
+
 
     @classmethod
     def from_zip(cls, fpath: str):
