@@ -24,7 +24,7 @@ if len(argv) > 1:
         for wfa in ml.workflows.__all__:
             print(f"\t{wfa}")
             
-            if wf not in ["help", "--help", "-h"]:
-                exit(1)
-            else:
-                exit(0)
+        if wf not in ["help", "--help", "-h"]:
+            exit(1)
+        else:
+            exit(0)
