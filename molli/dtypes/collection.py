@@ -7,6 +7,8 @@ from zipfile import ZipFile
 from itertools import product, combinations_with_replacement
 from multiprocessing import Pool
 import asyncio as aio
+import numpy as np
+
 
 class Collection:
     """
@@ -23,7 +25,7 @@ class Collection:
     def add(self, m: Molecule):
         self.molecules.append(m)
         self.mol_index.append(m.name)
-    
+
     def extend(self, c: Collection):
         for m in c:
             self.add(m)
@@ -41,6 +43,23 @@ class Collection:
             return self.molecules[self.mol_index.index(item)]
         else:
             return Collection(self.name, self.molecules[item])
+
+    def bounding_box(self):
+        """
+        Get the rectangular space that encompasses all atoms in all conformers
+        """
+        mins = []
+        maxs = []
+
+        for m in self.molecules:
+            rmin, rmax = m.bounding_box()
+            mins.append(rmin)
+            maxs.append(rmax)
+
+        rmin = np.min(mins, axis=(0,))
+        rmax = np.max(maxs, axis=(0,))
+
+        return rmin, rmax
 
     def to_multixyz(self, fn: str = None):
         """
@@ -61,8 +80,8 @@ class Collection:
         This function is designed to mimic applyfx, but be useful with awaitables.
         Right now does not support failure handling, this is something
         """
+
         def inner(*args, **kwargs):
-            
             async def f():
                 results = []
                 L = len(self.mol_index)
@@ -71,22 +90,23 @@ class Collection:
                     print(f"\nApplying [{aw.__name__}] to {L} molecules:")
 
                 for i, m in enumerate(self.molecules):
-                        results.append(await aio.wait_for(aw(m, *args, **kwargs), timeout=timeout))
-                        if show_progress and not (i + 1) % update:
-                            print(
-                                f"{i+1:>10} molecules processed ({(i+1)/L:>6.2%}) Total WCT: {datetime.now() - start}",
-                                flush=True,
-                            )
-                    
+                    results.append(
+                        await aio.wait_for(aw(m, *args, **kwargs), timeout=timeout)
+                    )
+                    if show_progress and not (i + 1) % update:
+                        print(
+                            f"{i+1:>10} molecules processed ({(i+1)/L:>6.2%}) Total WCT: {datetime.now() - start}",
+                            flush=True,
+                        )
+
                 if show_progress:
                     print(f"Complete! Total WCT: {datetime.now() - start}\n")
-                
-                return results
-            
-            return aio.run(f())
-        
-        return inner
 
+                return results
+
+            return aio.run(f())
+
+        return inner
 
     def applyfx(self, fx: Callable[[Molecule], Any]):
         """
@@ -97,8 +117,6 @@ class Collection:
         if fx returns Molecule objects, they are then assembled in a collection.
         Otherwise, it returns a list.
         """
-
-        
 
         def inner(workers=1, show_progress=True, update=1000):
             result = []
@@ -170,17 +188,14 @@ class Collection:
     @classmethod
     def merge(cls, *collections: Collection, name="merged"):
         """
-        Self-explanatory 
+        Self-explanatory
         """
         res = cls(name=name)
 
         for c in collections:
             res.extend(c)
-        
+
         return res
-
-
-
 
     @classmethod
     def from_zip(cls, fpath: str):

@@ -607,6 +607,23 @@ class Molecule:
 
         return fx
 
+    def bounding_box(self):
+        """
+        Get the rectangular space that encompasses all atoms in all conformers
+        """
+        mins = []
+        maxs = []
+
+        for g in self.conformers:
+            rmin, rmax = g.bounding_box()
+            mins.append(rmin)
+            maxs.append(rmax)
+
+        rmin = np.min(mins, axis=(0,))
+        rmax = np.max(maxs, axis=(0,))
+
+        return rmin, rmax
+
     def to_xml(self, pretty=True):
         """
         Save the molecule object in an xml format

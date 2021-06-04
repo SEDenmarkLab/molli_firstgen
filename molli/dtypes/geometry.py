@@ -3,6 +3,8 @@ import numpy as np
 import re
 from typing import *  # pylint: disable=unused-wildcard-import
 from copy import deepcopy
+
+from numpy.lib.index_tricks import AxisConcatenator
 from ..ftypes.xyz import parse_xyz
 
 # pylint: disable=no-member
@@ -148,8 +150,8 @@ class CartesianGeometry:
         p2 = self.coord[idx2]
 
         return distance(p1, p2)
-    
-    def get_angle(self, idx1:int, idx2:int, idx3:int):
+
+    def get_angle(self, idx1: int, idx2: int, idx3: int):
         """
         Measure the angle
         """
@@ -157,7 +159,6 @@ class CartesianGeometry:
         v2 = self.coord[idx3] - self.coord[idx2]
         dt = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
         return np.arccos(dt)
-
 
     def get_coord(self, idx: int):
         return self.coord[idx]
@@ -173,6 +174,16 @@ class CartesianGeometry:
             gs += f"{x:0.{p}f},{y:0.{p}f},{z:0.{p}f};"
 
         return gs
+
+    def bounding_box(self):
+        """
+        Return 6 coordinates that determine the rectangular space which fits all the atoms
+        `return (xmin, ymin, zmin), (xmin, ymin, zmin)`
+        """
+        rmin = np.min(self.coord, axis=(0,))
+        rmax = np.max(self.coord, axis=(0,))
+
+        return rmin, rmax
 
     @classmethod
     def from_str(cls, s: str, u: str = "A"):
@@ -234,6 +245,6 @@ class CartesianGeometry:
             x, y, z = xyz
             res += f"{atoms[i]} {x:>10.4f} {y:>10.4f} {z:>10.4f}\n"
         return res
-    
-    def clone_geometry(self, other:CartesianGeometry):
+
+    def clone_geometry(self, other: CartesianGeometry):
         self.coord = deepcopy(other.coord)

@@ -13,6 +13,8 @@ from . import drivers
 from . import parsing
 from . import utils
 from . import workflows
+from . import descriptor
+from . import math
 
 
 # For convenience, some functions and classes will be imported directly in here
@@ -20,4 +22,11 @@ from . import workflows
 # NOTE: This list is subject to changes without notification
 
 from .dtypes import Molecule, Collection, CollectionFile
-from .drivers import XTBDriver, CRESTDriver, OpenBabelDriver, ORCADriver,  Concurrent  # CRESTDriver, OpenBabelDriver
+from .drivers import (
+    XTBDriver,
+    CRESTDriver,
+    OpenBabelDriver,
+    ORCADriver,
+    Concurrent,
+)  # CRESTDriver, OpenBabelDriver
+from .descriptor import Grid, GridDescriptor, RectangularGrid
