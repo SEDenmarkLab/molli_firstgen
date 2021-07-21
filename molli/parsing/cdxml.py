@@ -41,7 +41,7 @@ def split_cdxml(file_path: str, enum=False, fmt="m{idx}") -> Collection:
     textboxes = rt.findall("./*/t") + rt.findall("./*/group/t")
 
     if not enum:
-        assert len(fragments) == len(
+        assert len(fragments) <= len(
             textboxes
         ), f"Received {len(fragments)} fragments and {len(textboxes)} tboxes"
 
@@ -52,9 +52,13 @@ def split_cdxml(file_path: str, enum=False, fmt="m{idx}") -> Collection:
         label_coord = []
 
         for tb in textboxes:
-            l, t, r, b = parse_pos(tb.attrib["BoundingBox"])
-            label_coord.append([(r + l) / 2, (b + t) / 2])
-            labels.append(tb.find("./s").text)
+            try:
+                l, t, r, b = parse_pos(tb.attrib["BoundingBox"])
+            except:
+                pass
+            else:           
+                label_coord.append([(r + l) / 2, (b + t) / 2])
+                labels.append(tb.find("./s").text)
 
     # Iterate over fragments
     # Convert 2d geometry to Molecule files

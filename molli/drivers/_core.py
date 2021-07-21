@@ -267,7 +267,10 @@ class AsyncConcurrent:
                 br = self._bypassed / total
 
                 s = success - b
-                sr = s / (total - b)
+                try:
+                    sr = s / (total - b)
+                except:
+                    break
                 e = timed_out + other_err
                 er = e / (total - b)
 

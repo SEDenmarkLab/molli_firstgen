@@ -326,14 +326,20 @@ class Molecule:
                 "The xyz file signature does not match the current atom list."
             )
 
-    def to_xyz(self):
+    def to_xyz(self, n=-1):
         """
-        Return a .xyz block
+        Return a .xyz block of n-th conformer (if n >= 0), else return default geometry
         """
+
+        if n == -1:
+            g = self.geom
+        else:
+            g = self.conformers[n]
+
         N = len(self.atoms)
         res = f"{N}\n{self.name}\n"
         for i, a in enumerate(self.atoms):
-            x, y, z = self.geom.coord[i]
+            x, y, z = g.coord[i]
             res += f"{a.symbol} {x:>10.4f} {y:>10.4f} {z:>10.4f}\n"
         return res
 

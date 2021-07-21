@@ -44,6 +44,12 @@ class Collection:
         else:
             return Collection(self.name, self.molecules[item])
 
+    def __setitem__(self, index, item):
+        if isinstance(index, int):
+            self.molecules[index] = item
+        elif isinstance(index, str):
+            self.molecules[self.mol_index.index(index)] = item
+
     def bounding_box(self):
         """
         Get the rectangular space that encompasses all atoms in all conformers

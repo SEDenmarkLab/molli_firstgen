@@ -139,6 +139,20 @@ class AsyncXTBDriver(AsyncExternalDriver):
         ref_energy = energies[0]
           
         return (np.array(energies) - ref_energy)*2625.5 # conversion to kJ/mol
+    
+    async def charges(self, mol: Molecule, method: str="gfn2", accuracy: float=0.5):
+        """
+            Compute atomic charges using XTB methodology
+        """
+        xyz = mol.to_xyz(n=0)
+        _cmd = f"""xtb struct.xyz --sp --{method} --acc {accuracy:0.2f}"""
+
+        code, files, stdout, stderr = await self.aexec(_cmd, inp_files={f"struct.xyz": xyz}, out_files=["charges"])
+        
+        charges = np.array(list(map(float, files["charges"].split())), dtype=np.float32)
+
+        return charges 
+
 
     @staticmethod
     def gen_bond_constraints(mol: Molecule, bonds: List[Bond]):
