@@ -266,6 +266,9 @@ class AsyncConcurrent:
                 b = self._bypassed
                 br = self._bypassed / total
 
+                if total - b == 0:
+                    break
+
                 s = success - b
                 try:
                     sr = s / (total - b)
