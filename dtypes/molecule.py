@@ -25,6 +25,8 @@ def yield_mol2_block_lines(title, text):
     for l in lines[s + 1 :]:
         if l and l[0] == "@":
             break
+        elif len(l.split()) < 1:
+            break
         else:
             yield l
 
@@ -190,7 +192,7 @@ class Molecule:
             mol2block = mol2block.decode()
 
         ## Retrieving molecule metadata
-        mol2_header = get_mol2_block_lines("molecule", mol2block)
+        mol2_header = get_mol2_block_lines("MOLECULE", mol2block)
         _name = mol2_header[0] if name == None else name
 
         ## Generating the list of atoms and molecular geometry
