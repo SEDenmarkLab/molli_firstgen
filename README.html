@@ -1,0 +1,50 @@
+<h1 id="molli-0.1.1-molecular-toolbox-library"><code>MOLLI-0.1.1</code>: Molecular toolbox Library</h1>
+<p>(C) 2021 Alexander S. Shved and the Denmark laboratory</p>
+<p>This code is in development stages and its open dissemination is discouraged.</p>
+<p><em>PLEASE MAKE SURE THAT <strong>CONFORMER GENERATION CODE</strong> GETS PROPERLY PUBLISHED BEFORE YOU CAN PUBLISH YOUR WORKFLOWS WITHOUT SHARING THE AUTHORSHIP ON PAPERS</em></p>
+<p><br /><span class="math display">∭<em>f</em>(<em>x</em>)<em>d</em><em>x</em> = <em>F</em>(<em>x</em>) + <em>C</em></span><br /></p>
+<h2 id="about-molli">About <code>MOLLI</code></h2>
+<p>The primary purpose of this code is to consolidate efforts in the Chemoinformatics subgroup of the Denmark laboratory in a modern object-oriented python library. It is intended to be a concise and memory efficient implementation with minimal dependencies for the core. It is my hope that one day we will be able to provide a chemoinformatics toolkit that is well suited for any small molecule chemistry project workflow and be at the very least as robust as RDKit. Any assistance</p>
+<h2 id="contributing-to-code">Contributing to code</h2>
+<p>Everyone is welcome to leave feedback and contribute to the code through GitHub’s standard toolbox. Several rules must be followed:</p>
+<ol type="1">
+<li><p>Any array or matrix operation is strongly encouraged to be done with <code>numpy</code> objects and functions. They have been significantly optimized and are faster than naive code.</p></li>
+<li>Object-oriented programming style is mandatory for the core structure</li>
+<li>Functional programming style is mandatory for the workflows</li>
+<li>Code must be autoformatted using <code>black</code> package.</li>
+<li>Use <code>pep8</code> guidelines for the coding style whenever possible.</li>
+<li>Thorough documentation and comments are encouraged</li>
+<li><p>Variable and functional names should be self-explanatory.</p></li>
+</ol>
+<h1 id="requirements-dependencies">Requirements &amp; Dependencies</h1>
+<h2 id="requirements">Requirements</h2>
+<p><code>python &gt;= 3.9</code> is required for this code to run. <code>openbabel</code>, <code>xtb</code>, <code>crest</code>, and any external packages need to be obtained separately and installed separately. Their respective drivers will not be able to run, unless the respective executable files have been added to <code>$PATH</code></p>
+<p><strong>WARNING: <code>xtb</code> and <code>crest</code> drivers are best executed with Linux environments. If you are competent enough to be able to compile those pieces of software on Windows, please, let me know.</strong></p>
+<h2 id="python-dependencies">Python dependencies</h2>
+<p>The list of dependencies is kept to a minimum and they will be automatically checked by the installation script. No need to worry about these!</p>
+<h1 id="installation">Installation</h1>
+<p><code>molli</code> package is designed as a <code>pip</code> package.</p>
+<h2 id="for-general-purposes">For general purposes</h2>
+<p><strong>Use these instructions if you are not sure what is best for you.</strong></p>
+<p>This installation does not assume any intervention in the code. Most likely you will be installing in this mode if you are the end user and you are not planning to modify the core of the package.</p>
+<ol type="1">
+<li><p><strong>Download the code from the project’s <a href="https://github.com/SEDenmarkLab/molli">GitHub repository</a>.</strong> This may be done in a number of ways, but for simplicity we are going to assume that the web-based download is the default option. Download the repository as a zip archive. <img src="./documentation/imgs/001-download.png" alt="Download instructions" /></p></li>
+<li></li>
+</ol>
+<pre><code>    pip install ./ </code></pre>
+<h2 id="for-development-purposes">For development purposes</h2>
+<p>This mode of installation is different in that it is easier to modify the code and have it immediately available. Select this if you are planning to contribute to the code of package, or if you know otherwise that this is beneficial for you.</p>
+<pre><code>    pip install ./ -e</code></pre>
+<h1 id="basic-tests">Basic Tests</h1>
+<pre class="python3"><code>print(&quot;Trying to import molli:&quot;)
+try:
+    import molli
+except Exception as xc:
+    print(&quot;- Failed to import molli.&quot;)
+    print(&quot;  Exception:&quot;, xc)
+    exit(1)
+else:
+    print(&quot;+ Successfully imported molli&quot;, molli.__version__)
+    exit(0)</code></pre>
+<h1 id="advanced-usage">Advanced Usage</h1>
+<h1 id="future-development">Future Development</h1>
