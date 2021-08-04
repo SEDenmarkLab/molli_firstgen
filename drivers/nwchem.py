@@ -1,17 +1,19 @@
 from ._core import AsyncExternalDriver
 from ..dtypes import Atom, Bond, Molecule, CartesianGeometry
+from copy import deepcopy
+from datetime import datetime
 from glob import glob
+from warnings import warn
+from typing import List, Callable
+from math import ceil, pi
 import numpy as np
 from itertools import combinations
+import asyncio as aio
+import re
 # Ian checked/added
 import pandas as pd
 import io
 import scipy.spatial.distance as dist
-from asyncio.subprocess import PIPE
-from typing import Callable, Dict, List, Awaitable
-from tempfile import TemporaryDirectory as TempDir, NamedTemporaryFile as TempFile
-import asyncio as aio
-import os
 
 def default_nw_inp():
 
@@ -25,17 +27,16 @@ start
 geometry units angstroms noautoz
 symmetry C1
 {trimmed_xyz_block}
-end
 
+end
 charge {charge}
 
-driver 
-    loose
+driver
     maxiter {geomiter}
 end
 
 basis
-* library def2-svp 
+* library 6-31g*
 end
 
 dft
@@ -56,12 +57,11 @@ task esp
 """
 
 class AsyncNWCHEMDriver(AsyncExternalDriver):
-    def __init__(self,
-                name="",
+    def __init__(self,name="",
                 scratch_dir="",
                 nprocs=1,
-                # memory_total="800 mb",
-                # memory_global="400 mb",
+                memory_total="800 mb",
+                memory_global="400 mb",
                 encoding="utf8"):
 
         ''' 
@@ -74,11 +74,8 @@ class AsyncNWCHEMDriver(AsyncExternalDriver):
                 nprocs=nprocs,
                 encoding=encoding
         )
-        # self.memory_total = memory_total
-        # self.memory_global = memory_global
-        with open(self.name+'_out.csv','a') as f:
-            f.write('mol,espmin,espmax,min_a_chg,max_a_chg\n')
-
+        self.memory_total = memory_total
+        self.memory_global = memory_global
 
     async def optimize_esp(
         self,
@@ -93,24 +90,21 @@ class AsyncNWCHEMDriver(AsyncExternalDriver):
         This will update geometry for the structures only if update_geom is True.
         This is not implemented yet [7/21/2021]
 
-        Default output is a tuple of espmin, espmax, minimum atomic charge, max atomic charge
-        These are written to a file as they are generated so that names are correct even when files fail
-        The .esp output (xyz + atomic charges format) is output at the end
-        returns mol.name,espmin,espmax,min_a_chg,max_a_chg,files[f"{nn}.esp"]
+        Default output is a tuple of esp min, esp max, and energy
         ''' 
         ## Need to get input file from mol with the necessary nwchem information in it
-        self.maxiter = maxiter
+        
         trim_xyz = mol.to_xyz()
 
         xyz_lines = '\n'.join(trim_xyz.splitlines(keepends=False)[2:])
-        nw_lines = self._nwchem_composition(xyz_=xyz_lines,opt_=True)
+        nw_lines = self._nwchem_composition(xyz_=trim_xyz,opt_=True)
         
         nn = mol.name #name of mol for input line fstring
 
         # Command will use mpirun to run nwchem parallelized
         # OR NOT if no parallelization requested
         if self.nprocs > 1:        
-            _cmd = f"""mpiexec --prefix /opt/openmpi/openmpi314 -n {self.nprocs} nwchem {nn}.nw"""
+            _cmd = f"""mpirun -np {self.nprocs} nwchem {nn}.nw"""
         else:
             _cmd = f"""nwchem {nn}.nw """                
 
@@ -124,11 +118,6 @@ class AsyncNWCHEMDriver(AsyncExternalDriver):
             out_files=[f"{nn}.esp",f"{nn}.grid"]
         )
 
-        espmin,espmax,min_a_chg,max_a_chg = self.get_min_max_esp(files[f"{nn}.grid"],files[f"{nn}.esp"])
-        with open(self.name+'_out.csv','a') as f:
-            f.write(f"{mol.name},{espmin},{espmax},{min_a_chg},{max_a_chg}\n")
-        return mol.name,espmin,espmax,min_a_chg,max_a_chg,files[f"{nn}.esp"]
-
 
         # see molli.drivers.xtb AsyncXTBDriver.fix_long_bonds code for inspiration
 
@@ -138,60 +127,6 @@ class AsyncNWCHEMDriver(AsyncExternalDriver):
         # geometry at the end. 
 
         # This is for later: make it possible to return updated xyz geometries for a list of mol objects
-
-    async def aexec(
-        self, cmd: str, inp_files: Dict[str, str] = dict(), out_files: List[str] = []
-    ):
-        """
-        Coroutine that asynchronously schedules a shell command to be executed
-        Before the command is executed it writes temporary files (`inp_files`)
-        After the command is executed, output files are harvested (`out_files`)
-        returns: code, files, stdout, stderr
-        """
-
-        with TempDir(prefix=self.prefix, dir=self.scratch_dir) as td:
-            self.writefiles(td, inp_files)
-            # Asynchronous process spawning code goes here
-
-            _cmd = f"cd {td}; {cmd}"
-
-            proc = await aio.create_subprocess_shell(_cmd, stdout=PIPE, stderr=PIPE)
-            # code = await proc.wait()
-            while True:
-                await aio.sleep(10)
-                _out = await proc.stdout.read()
-                stdout = _out.decode(self.encoding)
-
-                if "Total times" in stdout[-1]:
-                    await aio.sleep(60)
-                    proc.terminate()
-                    code = 0
-                    break
-
-                else:
-                    if not (proc.returncode is None):
-                        code = proc.returncode
-                        break
-
-            _out = await proc.stdout.read()
-            _err = await proc.stderr.read()
-
-            stdout = _out.decode(self.encoding)
-            stderr = _err.decode(self.encoding)
-
-            files = self.getfiles(td, out_files)
-
-            if code:
-                td_base = os.path.basename(td)
-                with open(f"{self.scratch_dir}/{td_base}_dump_stdout.log", "wt") as f:
-                    f.write(stdout)
-                with open(f"{self.scratch_dir}/{td_base}_dump_stderr.log", "wt") as f:
-                    f.write(stderr)
-                    for fout in inp_files:
-                        f.write(f"\n\n === {fout} ===\n\n")
-                        f.write(inp_files[fout])
-
-        return code, files, stdout, stderr
 
     def _nwchem_composition(self,xyz_,opt_=True,):
         '''
@@ -204,17 +139,15 @@ class AsyncNWCHEMDriver(AsyncExternalDriver):
                                 charge='1',
                                 geomiter=str(self.maxiter),
                                 opt_or_not = r'task dft optimize',
-                                trimmed_xyz_block=xyz_,
-                                # opt_criteria='loose'
+                                trimmed_xyz_block=xyz_
                                 )
             return nw_string
         elif opt_ == False:
             nw_string = default_nw_inp().format(name=self.name,
                                 charge='1',
                                 geomiter=str(self.maxiter),
-                                opt_or_not = r'task dft energy',
-                                trimmed_xyz_block=xyz_,
-                                # opt_criteria='loose'
+                                opt_or_not = r'',
+                                trimmed_xyz_block=xyz_
                                 )
             return nw_string
 
@@ -224,20 +157,24 @@ class AsyncNWCHEMDriver(AsyncExternalDriver):
         '''
         raise NotImplementedError("In development")
         
+    def _esp_parser(self,esp_file,grid_file):
+        '''
+        This will parse out esp descriptors.
+        ESp first, then grid file
+        '''
+        raise NotImplementedError("FUCK OPENBABEL")
 
+    def _convert_grid_file(self,grid_file_lines):
+        ...
     def get_min_max_esp(self,grid_file,esp_file):
         '''
-        This returns a tuple (ESPmin,ESPmax) in kcal/mol
+        This returns a tuple (ESPmin,ESPmax)
         '''
-        h_t_kcal = 627.509469
+
+
         mxyz_df,mc_df,mxyz_arr,mc_arr = self._process_nwespfile(esp_file,typ_='esp')
         gxyz_df,gc_df,gxyz_arr,gc_arr = self._process_nwespfile(grid_file,typ_='grid')
-        esp_array = gc_arr*h_t_kcal
-        espmin = np.min(esp_array)
-        espmax = np.max(esp_array)
-        max_a_chg = np.max(mc_arr)
-        min_a_chg = np.min(mc_arr)
-        return espmin,espmax,min_a_chg,max_a_chg
+
 
 
     def _measure_distance(self,grid_coord,atom_coord):
