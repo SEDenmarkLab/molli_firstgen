@@ -28,5 +28,6 @@ from .drivers import (
     OpenBabelDriver,
     ORCADriver,
     Concurrent,
+    NWCHEMDriver,
 )  # CRESTDriver, OpenBabelDriver
 from .descriptor import Grid, GridDescriptor, RectangularGrid
