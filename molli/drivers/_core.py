@@ -11,7 +11,6 @@ import pickle
 from ..dtypes import CollectionFile, Collection, Molecule
 from glob import glob
 
-import warnings
 
 class AsyncExternalDriver:
     """
@@ -29,7 +28,6 @@ class AsyncExternalDriver:
     def __init__(
         self, name="", scratch_dir: str = "", nprocs: int = 1, encoding: str = "utf8"
     ):
-        self.name = name
         self.scratch_dir = scratch_dir
         self.nprocs = nprocs
         self.encoding = encoding
@@ -229,13 +227,11 @@ class AsyncConcurrent:
         other_err = 0
         not_started = 0
 
-        for i, x in enumerate(self._result):
+        for x in self._result:
             if isinstance(x, Exception) and isinstance(x, aio.TimeoutError):
                 timed_out += 1
-                warnings.warn(f"Molecule {self.collection[i].name} timed out")
             elif isinstance(x, Exception):
                 other_err += 1
-                warnings.warn(f"Molecule {self.collection[i].name} exception: {x}")
             elif x is None:
                 not_started += 1
             else:
@@ -269,6 +265,9 @@ class AsyncConcurrent:
                 total, success, timed_out, other_err, not_started = self.get_status()
                 b = self._bypassed
                 br = self._bypassed / total
+
+                if total - b == 0:
+                    break
 
                 s = success - b
                 try:
@@ -308,7 +307,7 @@ class AsyncConcurrent:
 
             async def f(m):
                 return await fx(m, **kwargs)
-         
+
             return self._exec(f)
 
         return inner
