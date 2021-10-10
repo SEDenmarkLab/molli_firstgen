@@ -23,7 +23,13 @@ def yield_mol2_block_lines(title, text):
     s = lines.index("@<TRIPOS>{}".format(str(title).strip().upper()))
 
     for l in lines[s + 1 :]:
-        if l and l[0] == "@":
+        if len(l) == 0:
+            break
+        elif l == '#':
+            break
+        elif l[0] == "@":
+            break        
+        elif len(l.split()) < 1:
             break
         else:
             yield l
@@ -190,7 +196,7 @@ class Molecule:
             mol2block = mol2block.decode()
 
         ## Retrieving molecule metadata
-        mol2_header = get_mol2_block_lines("molecule", mol2block)
+        mol2_header = get_mol2_block_lines("MOLECULE", mol2block)
         _name = mol2_header[0] if name == None else name
 
         ## Generating the list of atoms and molecular geometry
@@ -207,7 +213,6 @@ class Molecule:
         ## Generating the list of bonds
         mol2_bonds = get_mol2_block_lines("BOND", mol2block)
         _bonds = []
-
         for line in mol2_bonds:
             ls = line.split()
             a1, a2, bt = int(ls[1]) - 1, int(ls[2]) - 1, ls[3]
@@ -248,6 +253,16 @@ class Molecule:
                 return self.atoms.index(a)
 
         raise IndexError(f"Cannot find {label} in {self.name}")
+
+    def get_atom_by_idx(self, label: int):
+        """
+        Uses atom index (from 1, like molecule files) to find the atom object
+        """
+
+        if isinstance(label,int):
+            return self.atoms[label-1]
+        raise IndexError(f"Cannot find {label} in {self.name}; ensure that you have passed\
+            an int corresponding to the atom number")
 
     def add_bond(self, a1: Atom, a2: Atom, bond_type: str = "1"):
         """

@@ -144,7 +144,11 @@ class AsyncXTBDriver(AsyncExternalDriver):
         """
             Compute atomic charges using XTB methodology
         """
-        xyz = mol.to_xyz(n=0)
+        try:
+            xyz = mol.to_xyz(n=0)
+        except IndexError:
+            xyz = mol.to_xyz()
+            
         _cmd = f"""xtb struct.xyz --sp --{method} --acc {accuracy:0.2f}"""
 
         code, files, stdout, stderr = await self.aexec(_cmd, inp_files={f"struct.xyz": xyz}, out_files=["charges"])
