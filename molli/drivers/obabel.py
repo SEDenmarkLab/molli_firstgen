@@ -1,5 +1,5 @@
 from ._core import AsyncExternalDriver
-from ..dtypes import Molecule
+from ..dtypes import Molecule, CartesianGeometry
 
 
 class AsyncOpenBabelDriver(AsyncExternalDriver):
@@ -76,16 +76,43 @@ class AsyncOpenBabelDriver(AsyncExternalDriver):
         res.update_geom_from_xyz(xyz_h_opt, assert_single=True)
 
         return res
-    
+
     async def optimize(self, mol: Molecule, ff="UFF", n=500, c=1e-4) -> Molecule:
         """
         Same as minimize, but takes a molecule instance
         """
 
         mol2 = mol.to_mol2()
-        optimized = await self.minimize(mol_text=mol2, src="mol2", dest="mol2", ff=ff, n=n, c=c)
+        optimized = await self.minimize(
+            mol_text=mol2, src="mol2", dest="mol2", ff=ff, n=n, c=c
+        )
 
         newmol = Molecule.from_mol2(optimized)
         newmol.name = mol.name
 
         return newmol
+
+    async def confab(
+        self, mol: Molecule, rcutoff=0.5, ecutoff=50.0, conf=1000000, original=False
+    ):
+        name = mol.name
+
+        # Create the command for openbabel
+        _cmd = f"obabel {name}.mol2 -O conformers.xyz --confab --rcutoff {rcutoff} --ecutoff {ecutoff} --conf {conf}"
+        if original:
+            _cmd += " --original"
+
+        mol2_block = mol.to_mol2()
+        _, files, _, _ = await self.aexec(
+            _cmd, inp_files={f"{name}.mol2": mol2_block}, out_files=["conformers.xyz"]
+        )
+
+        try:
+            confs = files["conformers.xyz"]
+        except:
+            raise FileNotFoundError("conformers.xyz")
+
+        geoms = [x for x, _, _ in CartesianGeometry.from_xyz(confs)]
+        mol.embed_conformers(*geoms, mode="w")
+
+        return mol
