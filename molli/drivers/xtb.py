@@ -31,30 +31,70 @@ class AsyncXTBDriver(AsyncExternalDriver):
         """
 
         g0_xyz = mol.to_xyz()
-
         nn = mol.name
+        optimized = await self.xyz_optimize(g0_xyz, method = method, crit = crit, xtbinp = xtbinp,
+                                                maxiter = 50,xyz_name = nn + '_g0.xyz')
+        
+        if not in_place:
+            mol1 = deepcopy(mol)
+            mol1.update_geom_from_xyz(optimized, assert_single=True)
+            return mol1
+        else:
+            mol.update_geom_from_xyz(optimized, assert_single=True)
 
+    async def xyz_optimize(
+        self,
+        xyz: str,
+        method: str = 'gff',
+        crit: str = "normal",
+        xtbinp: str='',
+        maxiter: int = 50,
+        xyz_name: str = 'mol'
+    ):
         # command that will be used to execute xtb package
-        _cmd = f"""xtb {nn}_g0.xyz --{method} --opt {crit} --cycles {maxiter} {"--input param.inp" if xtbinp else ""} -P {self.nprocs}"""
+        _cmd = f"""xtb {xyz_name}.xyz --{method} --opt {crit} --cycles {maxiter} {"--input param.inp" if xtbinp else ""} -P {self.nprocs}"""
 
         # pylint: disable=unused-variable
         code, files, stdout, stderr = await self.aexec(
             _cmd,
-            inp_files={f"{nn}_g0.xyz": g0_xyz, "param.inp": xtbinp},
+            inp_files={f"{xyz_name}.xyz": xyz, "param.inp": xtbinp},
             out_files=["xtbopt.xyz"],
         )
 
         if "xtbopt.xyz" in files:
             nxyz = files["xtbopt.xyz"]
-
-            if not in_place:
-                mol1 = deepcopy(mol)
-                mol1.update_geom_from_xyz(nxyz, assert_single=True)
-                return mol1
-            else:
-                mol.update_geom_from_xyz(nxyz, assert_single=True)
+            return nxyz
         else:
             raise FileNotFoundError("Could not locate xtb output file.")
+
+    async def optimize_conformers(
+        self,
+        mol: Molecule,
+        method: str = 'gff',
+        crit: str = "normal",
+        xtbinp: str='',
+        maxiter: int = 50,
+        in_place: bool = False,
+    ):
+        xyzs = mol.confs_to_xyzs()
+        nn = mol.name
+
+        optimized_confs = []
+        for i, xyz in enumerate(xyzs):
+            mol_name = nn + f'_{i}'
+            optimized = await self.xyz_optimize(xyz, method=method, crit=crit, xtbinp=xtbinp,
+                                                    maxiter=maxiter, xyz_name=mol_name)
+            optimized_confs.append(optimized)
+
+        geoms = [CartesianGeometry.from_xyz(conf) for conf in optimized_confs]
+        if in_place:
+            mol.embed_conformers(*geoms, mode='w')
+        else:
+            mol1 = deepcopy(mol)
+            mol1.embed_conformers(*geoms, mode='w')
+            return mol1
+
+
 
     async def fix_long_bonds(
         self,
