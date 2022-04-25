@@ -11,6 +11,7 @@ from itertools import combinations
 import asyncio as aio
 import re
 
+
 class AsyncXTBDriver(AsyncExternalDriver):
     def __init__(self, name="", scratch_dir="", nprocs=1, encoding="utf8"):
         super().__init__(
@@ -32,9 +33,15 @@ class AsyncXTBDriver(AsyncExternalDriver):
 
         g0_xyz = mol.to_xyz()
         nn = mol.name
-        optimized = await self.xyz_optimize(g0_xyz, method = method, crit = crit, xtbinp = xtbinp,
-                                                maxiter = 50,xyz_name = nn + '_g0.xyz')
-        
+        optimized = await self.xyz_optimize(
+            g0_xyz,
+            method=method,
+            crit=crit,
+            xtbinp=xtbinp,
+            maxiter=50,
+            xyz_name=nn + "_g0.xyz",
+        )
+
         if not in_place:
             mol1 = deepcopy(mol)
             mol1.update_geom_from_xyz(optimized, assert_single=True)
@@ -45,11 +52,11 @@ class AsyncXTBDriver(AsyncExternalDriver):
     async def xyz_optimize(
         self,
         xyz: str,
-        method: str = 'gff',
+        method: str = "gff",
         crit: str = "normal",
-        xtbinp: str='',
+        xtbinp: str = "",
         maxiter: int = 50,
-        xyz_name: str = 'mol'
+        xyz_name: str = "mol",
     ):
         # command that will be used to execute xtb package
         _cmd = f"""xtb {xyz_name}.xyz --{method} --opt {crit} --cycles {maxiter} {"--input param.inp" if xtbinp else ""} -P {self.nprocs}"""
@@ -70,9 +77,9 @@ class AsyncXTBDriver(AsyncExternalDriver):
     async def optimize_conformers(
         self,
         mol: Molecule,
-        method: str = 'gff',
+        method: str = "gff",
         crit: str = "normal",
-        xtbinp: str='',
+        xtbinp: str = "",
         maxiter: int = 50,
         in_place: bool = False,
     ):
@@ -81,22 +88,26 @@ class AsyncXTBDriver(AsyncExternalDriver):
 
         optimized_confs = []
         for i, xyz in enumerate(xyzs):
-            mol_name = nn + f'_{i}'
-            optimized = await self.xyz_optimize(xyz, method=method, crit=crit, xtbinp=xtbinp,
-                                                    maxiter=maxiter, xyz_name=mol_name)
+            mol_name = nn + f"_{i}"
+            optimized = await self.xyz_optimize(
+                xyz,
+                method=method,
+                crit=crit,
+                xtbinp=xtbinp,
+                maxiter=maxiter,
+                xyz_name=mol_name,
+            )
             optimized_confs.append(optimized)
 
         geoms = [CartesianGeometry.from_xyz(conf)[0][0] for conf in optimized_confs]
         if in_place:
-            mol.embed_conformers(*geoms, mode='w')
-            #return a value other than None so that it will display to the user as successful
+            mol.embed_conformers(*geoms, mode="w")
+            # return a value other than None so that it will display to the user as successful
             return True
         else:
             mol1 = deepcopy(mol)
-            mol1.embed_conformers(*geoms, mode='w')
+            mol1.embed_conformers(*geoms, mode="w")
             return mol1
-
-
 
     async def fix_long_bonds(
         self,
@@ -144,28 +155,28 @@ class AsyncXTBDriver(AsyncExternalDriver):
         inp += "$end\n"
 
         m1 = await self.optimize(
-            mol,
-            method=method,
-            crit="crude",
-            xtbinp=inp,
-            in_place=False,
+            mol, method=method, crit="crude", xtbinp=inp, in_place=False,
         )
 
         return m1
 
-    async def xyz_energy(self, xyz: str, method: str='gfn2', accuracy: float = 1.0):
+    async def xyz_energy(self, xyz: str, method: str = "gfn2", accuracy: float = 1.0):
         _cmd = f"""xtb struct.xyz --{method} --acc {accuracy:0.2f}"""
 
-        code, files, stdout, stderr = await self.aexec(_cmd, inp_files={f"struct.xyz": xyz})
-        
+        code, files, stdout, stderr = await self.aexec(
+            _cmd, inp_files={f"struct.xyz": xyz}
+        )
+
         # This is what we are trying to find in the output file
         # | TOTAL ENERGY             -172.541095318001 Eh   |
 
-        for l in stdout.split('\n')[::-1]:
+        for l in stdout.split("\n")[::-1]:
             if m := re.match(r"\s+\|\s+TOTAL ENERGY\s+(?P<eh>[0-9.-]+)\s+Eh\s+\|.*", l):
-                return float(m['eh'])
+                return float(m["eh"])
 
-    async def conformer_energies(self, mol: Molecule, method: str='gfn2', accuracy:float=1.0):
+    async def conformer_energies(
+        self, mol: Molecule, method: str = "gfn2", accuracy: float = 1.0
+    ):
         """
         Returns relative conformer energies in kJ/mol
         The relative energies are referenced to the first conformer
@@ -177,12 +188,18 @@ class AsyncXTBDriver(AsyncExternalDriver):
         for i, xyz in enumerate(xyzs):
             conf_energy = await self.xyz_energy(xyz, method=method, accuracy=accuracy)
             energies.append(conf_energy)
-        
+
         ref_energy = energies[0]
-          
-        return (np.array(energies) - ref_energy)*2625.5 # conversion to kJ/mol
-    
-    async def charges(self, mol: Molecule, method: str="gfn2", accuracy: float=0.5, net_charge: int = 0):
+
+        return (np.array(energies) - ref_energy) * 2625.5  # conversion to kJ/mol
+
+    async def charges(
+        self,
+        mol: Molecule,
+        method: str = "gfn2",
+        accuracy: float = 0.5,
+        net_charge: int = 0,
+    ):
         """
             Compute atomic charges using XTB methodology
 
@@ -192,12 +209,13 @@ class AsyncXTBDriver(AsyncExternalDriver):
         xyz = mol.to_xyz(n=0)
         _cmd = f"""xtb struct.xyz --sp --{method} --acc {accuracy:0.2f} --chrg {net_charge}"""
 
-        code, files, stdout, stderr = await self.aexec(_cmd, inp_files={f"struct.xyz": xyz}, out_files=["charges"])
-        
+        code, files, stdout, stderr = await self.aexec(
+            _cmd, inp_files={f"struct.xyz": xyz}, out_files=["charges"]
+        )
+
         charges = np.array(list(map(float, files["charges"].split())), dtype=np.float32)
 
-        return charges 
-
+        return charges
 
     @staticmethod
     def gen_bond_constraints(mol: Molecule, bonds: List[Bond]):
