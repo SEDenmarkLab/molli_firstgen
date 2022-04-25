@@ -89,6 +89,8 @@ class AsyncXTBDriver(AsyncExternalDriver):
         geoms = [CartesianGeometry.from_xyz(conf)[0][0] for conf in optimized_confs]
         if in_place:
             mol.embed_conformers(*geoms, mode='w')
+            #return a value other than None so that it will display to the user as successful
+            return True
         else:
             mol1 = deepcopy(mol)
             mol1.embed_conformers(*geoms, mode='w')
