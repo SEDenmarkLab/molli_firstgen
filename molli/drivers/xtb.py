@@ -83,6 +83,10 @@ class AsyncXTBDriver(AsyncExternalDriver):
         maxiter: int = 50,
         in_place: bool = False,
     ):
+        """
+        Perform the same sort of optimization as used in optimize(),
+        but for each conformer instead of for the molecule's main geometry.
+        """
         xyzs = mol.confs_to_xyzs()
         nn = mol.name
 
