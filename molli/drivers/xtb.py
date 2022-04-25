@@ -86,7 +86,7 @@ class AsyncXTBDriver(AsyncExternalDriver):
                                                     maxiter=maxiter, xyz_name=mol_name)
             optimized_confs.append(optimized)
 
-        geoms = [CartesianGeometry.from_xyz(conf) for conf in optimized_confs]
+        geoms = [CartesianGeometry.from_xyz(conf)[0][0] for conf in optimized_confs]
         if in_place:
             mol.embed_conformers(*geoms, mode='w')
         else:
