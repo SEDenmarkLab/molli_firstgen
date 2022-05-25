@@ -4,7 +4,6 @@ import re
 from typing import *  # pylint: disable=unused-wildcard-import
 from copy import deepcopy
 
-from numpy.lib.index_tricks import AxisConcatenator
 from ..ftypes.xyz import parse_xyz
 
 # pylint: disable=no-member

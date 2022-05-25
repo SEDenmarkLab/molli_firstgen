@@ -199,11 +199,13 @@ class AsyncConcurrent:
                 self._result[i] = res
 
                 if isinstance(res, Molecule):
-                    _, fn = mkstemp(
+                    fd, fn = mkstemp(
                         prefix=f"{mol.name}.", suffix=".xml", dir=self.backup_dir
                     )
                     with open(fn, "wt") as f:
                         f.write(res.to_xml())
+
+                    os.close(fd)
 
     def _spawn_workers(self, fx: Awaitable, n=1):
         if hasattr(self, "_worker_pool"):
