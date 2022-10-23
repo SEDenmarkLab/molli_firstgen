@@ -142,6 +142,29 @@ def structure_clone(atoms: List[Atom], bonds: List[Bond]) -> (List[Atom], List[B
 
     return new_atoms, new_bonds, old_new_map
 
+class Orca_Out_Recognize:
+    """
+    This builds a quick Orca object that is used with the Orca driver
+    """
+    def __init__(
+        self,
+        name: str,
+        output_file: str,
+        calc_type: str,
+        hess_file: str,
+    ):
+        self.name = name
+        self.output_file = output_file
+        self.calc_type = calc_type
+        self.hess_file = hess_file
+        self.end_line_list = output_file.split('\n')[-11:]
+        self.fixed_err = [f'{x}\n' for x in self.end_line_list]
+        self.end_lines = ''.join(self.fixed_err)
+
+        if any("ORCA TERMINATED NORMALLY" in x for x in self.end_line_list):
+            self.orca_failed = False
+        else:
+            self.orca_failed = True
 
 class Molecule:
     """

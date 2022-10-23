@@ -9,6 +9,8 @@ from datetime import datetime
 from tempfile import mkstemp
 import pickle
 from ..dtypes import CollectionFile, Collection, Molecule
+from dataclasses import dataclass
+from ..dtypes.molecule import Orca_Out_Recognize
 from glob import glob
 
 
@@ -112,6 +114,16 @@ class AsyncExternalDriver:
                     result[f] = fs.read()
         return result
 
+@dataclass(repr=True, init=True, frozen=True)
+class OrcaJobDescriptor:
+    '''
+    Used to avoid opening entire out file
+    '''
+    out_name: str
+    failed: bool
+    calc_type: str 
+    end_lines: str
+    hess_file_name: str
 
 class AsyncConcurrent:
     """
@@ -171,8 +183,58 @@ class AsyncConcurrent:
                         self._bypassed += 1
                     else:
                         self._queue.put_nowait((i, m))
+            elif backed_up := glob((f"{self.backup_dir}/{m.name}*.out")):
+                try:
+                    if len(backed_up) >= 1:
+                        orca_failed = True
+                        for out_file in backed_up:
+                            general_file_path_list = out_file.split('.')
+                            #Returns the most recent calculation done on this
+                            calc_type = general_file_path_list[0].split('_')[-1]
+                            with open(out_file, 'r') as f:
+                                end_line_list = f.readlines()[-11:]
+                                #This is a check to see if the ORCA output terminated normally
+                                #In the future, this should be further elaborated upon based on different erroring out messages, especially those regarding SCF non-convergence
+                                if any('ORCA TERMINATED NORMALLY' in x for x in end_line_list):
+                                    orca_failed = False
+                                    fixed_err = [f'{x}\n' for x in end_line_list]
+                                    end_lines = ''.join(fixed_err)
+                                    #Creates general file path not including hash
+                                    general_file_path = f"{general_file_path_list[0]}."
+                                    backed_up = [out_file]
+                                    break
+                        if orca_failed:
+                            raise FileNotFoundError('ORCA DID NOT TERMINATE NORMALLY')
+                    else:
+                        raise FileNotFoundError('Output File not found! Restarting Calculation')
+                    
+                    assert len(backed_up) == 1, 'The length of backed_up must be equal to 1.' 
+
+                    hess_file_name = None
+                    #Checks to see if frequency was the most recent calculation run
+                    print(general_file_path)
+                    if '_freq.' in general_file_path:
+                        print('henlo')
+                        #Glob is used to scrape any files and use a special character "*" to allow for collection of all files
+                        if len(hess_back :=glob(f"{general_file_path}*.hess")) == 1:
+                            hess_file_name = hess_back[0]
+                        elif len(hess_back) < 1:
+                            raise FileNotFoundError('Hessian not found for FREQ calculation. FREQ calculation must be restarted. Restarting...')
+                        else:
+                            raise NameError('Multiple files found with the general file name, unclear which one is associated with which file, restarting calculation')
+                except Exception as e:
+                    # print("... not good. Queuing up.")
+                    print(e)
+                    self._queue.put_nowait((i, m))
+                else:
+                    # print("... success! Bypassing.")  
+                    #This returns the result
+                    self._result[i] = OrcaJobDescriptor(out_name = backed_up[0], failed=orca_failed, calc_type = calc_type, end_lines = end_lines, hess_file_name = hess_file_name)
+                    self._bypassed += 1
+
             else:
                 self._queue.put_nowait((i, m))
+
 
         print(
             f"=== REQUESTED {len(collection)} :: IN QUEUE {self._queue.qsize()} :: BYPASSED {self._bypassed} ===",
@@ -206,7 +268,27 @@ class AsyncConcurrent:
                         f.write(res.to_xml())
 
                     os.close(fd)
+                elif isinstance(res, Orca_Out_Recognize):
+                    _, out_fn = mkstemp(
+                        prefix=f"{res.name}_{res.calc_type}.", suffix=".out", dir=self.backup_dir
+                    )
+                    with open(out_fn, "wt") as f:
+                        f.write(res.output_file)
 
+                    os.close(_)
+                    if res.hess_file is not None:
+                        _, hess_fn = mkstemp(
+                        prefix=f"{res.name}_{res.calc_type}.", suffix=".hess", dir=self.backup_dir
+                        )
+                        with open(hess_fn, "wt") as f:
+                            f.write(res.output_file)
+                        os.close(_)
+                        hess_file_name = hess_fn
+                    else:
+                        hess_file_name = None
+                    #Returning tuple as result including name, if orca failed, calc type, and the last 11 lines
+                    self._result[i] = OrcaJobDescriptor(out_name = f'{res.name}.out',failed = res.orca_failed,  calc_type = res.calc_type, end_lines = res.end_lines, hess_file_name = hess_file_name)
+                    
     def _spawn_workers(self, fx: Awaitable, n=1):
         if hasattr(self, "_worker_pool"):
             raise Exception("")
