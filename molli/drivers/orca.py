@@ -13,11 +13,13 @@ import numpy as np
 import re
 
 class AsyncORCADriver(AsyncExternalDriver):
-
+    def __init__(self, name="", scratch_dir="", nprocs=1, encoding="utf8"):
+        super().__init__(
+            name=name, scratch_dir=scratch_dir, nprocs=nprocs, encoding=encoding)
     async def orca_basic_calc(
         self, 
         mol: Molecule,
-        orca_alias: str = 'orca502', 
+        orca_path: str = '/opt/share/orca/5.0.2/orca', 
         ram_setting: str = '900',
         kohn_sham_type = 'rks',
         method: str = 'b3lyp',
@@ -34,7 +36,6 @@ class AsyncORCADriver(AsyncExternalDriver):
             Consider doing different calculations in different folders to prevent loading incorrect files.
         """
         
-        alias_dict = {'orca502': '/opt/share/orca/5.0.2/orca', 'orca501': '/opt/share/orca/5.0.1/orca','orca421': '/opt/share/orca/4.2.1/orca'}
         #Corrects xyz file to be usable in Orca
         full_xyz = mol.to_xyz()
         split_xyz_list = full_xyz.split('\n')
@@ -62,7 +63,7 @@ class AsyncORCADriver(AsyncExternalDriver):
         if calc_type == 'opt freq':
             calc_type = 'opt_freq'
 
-        _cmd = f"""{alias_dict[orca_alias]} {nn}_{calc_type}.inp > {nn}_{calc_type}.out"""
+        _cmd = f"""{orca_path} {nn}_{calc_type}.inp > {nn}_{calc_type}.out"""
 
         code, files, stdout, stderr = await self.aexec(
             _cmd,
