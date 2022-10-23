@@ -212,9 +212,7 @@ class AsyncConcurrent:
 
                     hess_file_name = None
                     #Checks to see if frequency was the most recent calculation run
-                    print(general_file_path)
                     if '_freq.' in general_file_path:
-                        print('henlo')
                         #Glob is used to scrape any files and use a special character "*" to allow for collection of all files
                         if len(hess_back :=glob(f"{general_file_path}*.hess")) == 1:
                             hess_file_name = hess_back[0]
@@ -274,7 +272,7 @@ class AsyncConcurrent:
                     )
                     with open(out_fn, "wt") as f:
                         f.write(res.output_file)
-
+                        # out_file_name = out_fn
                     os.close(_)
                     if res.hess_file is not None:
                         _, hess_fn = mkstemp(
@@ -283,11 +281,11 @@ class AsyncConcurrent:
                         with open(hess_fn, "wt") as f:
                             f.write(res.output_file)
                         os.close(_)
-                        hess_file_name = hess_fn
+                        # hess_file_name = hess_fn
                     else:
-                        hess_file_name = None
+                        hess_fn = None
                     #Returning tuple as result including name, if orca failed, calc type, and the last 11 lines
-                    self._result[i] = OrcaJobDescriptor(out_name = f'{res.name}.out',failed = res.orca_failed,  calc_type = res.calc_type, end_lines = res.end_lines, hess_file_name = hess_file_name)
+                    self._result[i] = OrcaJobDescriptor(out_name = out_fn ,failed = res.orca_failed,  calc_type = res.calc_type, end_lines = res.end_lines, hess_file_name = hess_fn)
                     
     def _spawn_workers(self, fx: Awaitable, n=1):
         if hasattr(self, "_worker_pool"):

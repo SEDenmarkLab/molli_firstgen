@@ -35,7 +35,7 @@ class AsyncORCADriver(AsyncExternalDriver):
         """
         
         alias_dict = {'orca502': '/opt/share/orca/5.0.2/orca', 'orca501': '/opt/share/orca/5.0.1/orca','orca421': '/opt/share/orca/4.2.1/orca'}
-
+        #Corrects xyz file to be usable in Orca
         full_xyz = mol.to_xyz()
         split_xyz_list = full_xyz.split('\n')
         split_xyz_list_fixed = [f'{x}\n' if i <= len(split_xyz_list)-3 else f'{x}' for i,x in enumerate(split_xyz_list)][2:]
@@ -80,7 +80,7 @@ class AsyncORCADriver(AsyncExternalDriver):
         except:
             raise FileNotFoundError(f'{nn}_{calc_type}.out')
 
-        orca_obj = Orca_Out_Recognize(name = f'{mol.name}', output_file = _out, calc_type = calc_type, hess_file = _hess)
+        orca_obj = Orca_Out_Recognize(name = f'{nn}', output_file = _out, calc_type = calc_type, hess_file = _hess)
         
         if orca_obj.orca_failed:
             print(f'{orca_obj.name}')
