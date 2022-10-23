@@ -31,7 +31,6 @@ class AsyncORCADriver(AsyncExternalDriver):
         ):
         """
             General Orca Driver to Create a File and run calculations. Currently usable for the following calculations: "sp","opt","freq", "opt freq".
-            Currently allows for Orca 5.0.2, 5.0.1, and 4.2.1 (orca502, oca501, and orca421 respectively).
             This currently cannot recognize different calculation types in a backup directory since the files are built from the "Molecule Object" name.
             Consider doing different calculations in different folders to prevent loading incorrect files.
         """
