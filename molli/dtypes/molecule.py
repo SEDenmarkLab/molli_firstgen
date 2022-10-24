@@ -157,15 +157,46 @@ class Orca_Out_Recognize:
         self.output_file = output_file
         self.calc_type = calc_type
         self.hess_file = hess_file
-        self.end_line_list = output_file.split('\n')[-11:]
-        self.fixed_err = [f'{x}\n' for x in self.end_line_list]
-        self.end_lines = ''.join(self.fixed_err)
+        if output_file is not None:
+            self.end_line_list = output_file.split('\n')[-11:]
+            self.fixed_err = [f'{x}\n' for x in self.end_line_list]
+            self.end_lines = ''.join(self.fixed_err)
 
-        if any("ORCA TERMINATED NORMALLY" in x for x in self.end_line_list):
-            self.orca_failed = False
+            if any("ORCA TERMINATED NORMALLY" in x for x in self.end_line_list):
+                self.orca_failed = False
+            else:
+                self.orca_failed = True
         else:
-            self.orca_failed = True
+            self.end_line_list = None
+            self.fixed_err = None
+            self.end_lines = None
+            self.orca_failed=None
+    def search_freqs(self, num_of_freqs: int):
+        '''
+        Will return a dictionary of number and frequency associated with number (in cm**-1) starting at 6, i.e. {6: 2.82, 7: 16.77 ...} based on the number of frequencies requested
+        '''
+        if self.orca_failed is None:
+            print('Orca failed calculation, no vibrational frequencies are registered. Returning None')
+            return None
+        reversed_all_out_lines = self.output_file.split('\n')[::-1]
+        #starts and indexes at the end of the file
+        for idx,line in enumerate(reversed_all_out_lines):
+            if 'VIBRATIONAL FREQUENCIES' == line:
+                first_freq = idx - 10
+                break
+        final_freq = first_freq - num_of_freqs
 
+        freq_requested = reversed_all_out_lines[final_freq:first_freq]
+        freq_dict = dict()
+        for line in freq_requested[::-1]:
+            no_spaces = line.replace(' ','')
+            freq_num = int(no_spaces.split(':')[0])
+            freq_value = float(no_spaces.split(':')[1].split('cm**-1')[0])
+
+            freq_dict.update({freq_num : freq_value})
+
+        return freq_dict
+        
 class Molecule:
     """
     Molecule is a class that is supposed to be a cornerstone in all cross-talk between different pieces of code.

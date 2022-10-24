@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio as aio
 from asyncio.subprocess import PIPE
+from dataclasses import dataclass
 from typing import Callable, Dict, List, Awaitable
 from tempfile import TemporaryDirectory as TempDir, NamedTemporaryFile as TempFile
 import functools
@@ -9,10 +10,10 @@ from datetime import datetime
 from tempfile import mkstemp
 import pickle
 from ..dtypes import CollectionFile, Collection, Molecule
-from dataclasses import dataclass
 from ..dtypes.molecule import Orca_Out_Recognize
 from glob import glob
 
+import warnings
 
 class AsyncExternalDriver:
     """
@@ -30,6 +31,7 @@ class AsyncExternalDriver:
     def __init__(
         self, name="", scratch_dir: str = "", nprocs: int = 1, encoding: str = "utf8"
     ):
+        self.name = name
         self.scratch_dir = scratch_dir
         self.nprocs = nprocs
         self.encoding = encoding
@@ -37,7 +39,6 @@ class AsyncExternalDriver:
 
         if not os.path.isdir(scratch_dir):
             os.makedirs(scratch_dir)
-
     async def aexec(
         self, cmd: str, inp_files: Dict[str, str] = dict(), out_files: List[str] = []
     ):
@@ -58,7 +59,7 @@ class AsyncExternalDriver:
             code = await proc.wait()
 
             _out = await proc.stdout.read()
-            _err = await proc.stdout.read()
+            _err = await proc.stderr.read()
 
             stdout = _out.decode(self.encoding)
             stderr = _err.decode(self.encoding)
@@ -114,6 +115,7 @@ class AsyncExternalDriver:
                     result[f] = fs.read()
         return result
 
+####Blake Dev Stuff Begin####
 @dataclass(repr=True, init=True, frozen=True)
 class OrcaJobDescriptor:
     '''
@@ -124,6 +126,7 @@ class OrcaJobDescriptor:
     calc_type: str 
     end_lines: str
     hess_file_name: str
+####Blake Dev Stuff End#####
 
 class AsyncConcurrent:
     """
@@ -161,7 +164,7 @@ class AsyncConcurrent:
         self.qsize = qsize
         self._result = [None] * len(collection)
         self._bypassed = 0
-
+        
         if not os.path.isdir(self.backup_dir):
             os.makedirs(self.backup_dir)
 
@@ -177,12 +180,28 @@ class AsyncConcurrent:
                     # print("... not good. Queuing up.")
                     self._queue.put_nowait((i, m))
                 else:
-                    # print("... success! Bypassing.")
+                    print("... success! Bypassing.")
                     if len(res.conformers):
                         self._result[i] = res
                         self._bypassed += 1
                     else:
                         self._queue.put_nowait((i, m))
+            ###Blake Attempting to make this more applicable to Ian's Script lol ####
+            elif backed_up := glob((f"{self.backup_dir}/{m.name}_confprops.pkl")):
+                try:
+                    # print(f"Molecule {m.name} has already been done. trying to read the pickle file ", end='')
+                    with open(f"{self.backup_dir}/{m.name}_confprops.pkl", 'rb') as f:
+                        load = pickle.load(f)
+                except:
+                    # print("... not good. Queuing up.")
+                    self._queue.put_nowait((i, m))
+                else:
+                    # print("... success! Bypassing.")                    
+                    self._result[i] = load
+                    self._bypassed += 1
+            ####End of Blake Attempting to make this more applicable to Ian's Script lol ####
+            ####Beginning of Blake doing some weird stuff with DFT output files####
+            #This needs to be altered in the future to allow for a calc_type to be referenced
             elif backed_up := glob((f"{self.backup_dir}/{m.name}*.out")):
                 try:
                     if len(backed_up) >= 1:
@@ -229,10 +248,10 @@ class AsyncConcurrent:
                     #This returns the result
                     self._result[i] = OrcaJobDescriptor(out_name = backed_up[0], failed=orca_failed, calc_type = calc_type, end_lines = end_lines, hess_file_name = hess_file_name)
                     self._bypassed += 1
-
+            ####End of Blake doing some weird stuff with DFT output files####
+              
             else:
                 self._queue.put_nowait((i, m))
-
 
         print(
             f"=== REQUESTED {len(collection)} :: IN QUEUE {self._queue.qsize()} :: BYPASSED {self._bypassed} ===",
@@ -259,21 +278,24 @@ class AsyncConcurrent:
                 self._result[i] = res
 
                 if isinstance(res, Molecule):
-                    fd, fn = mkstemp(
+                    _, fn = mkstemp(
                         prefix=f"{mol.name}.", suffix=".xml", dir=self.backup_dir
                     )
                     with open(fn, "wt") as f:
                         f.write(res.to_xml())
-
-                    os.close(fd)
-                elif isinstance(res, Orca_Out_Recognize):
-                    _, out_fn = mkstemp(
-                        prefix=f"{res.name}_{res.calc_type}.", suffix=".out", dir=self.backup_dir
-                    )
-                    with open(out_fn, "wt") as f:
-                        f.write(res.output_file)
-                        # out_file_name = out_fn
                     os.close(_)
+                ###Blake Dev Shit Again
+                elif isinstance(res, Orca_Out_Recognize):
+                    if res.output_file is not None:
+                        _, out_fn = mkstemp(
+                            prefix=f"{res.name}_{res.calc_type}.", suffix=".out", dir=self.backup_dir
+                        )
+                        with open(out_fn, "wt") as f:
+                            f.write(res.output_file)
+                            # out_file_name = out_fn
+                        os.close(_)
+                    else:
+                        out_fn = None
                     if res.hess_file is not None:
                         _, hess_fn = mkstemp(
                         prefix=f"{res.name}_{res.calc_type}.", suffix=".hess", dir=self.backup_dir
@@ -286,7 +308,7 @@ class AsyncConcurrent:
                         hess_fn = None
                     #Returning tuple as result including name, if orca failed, calc type, and the last 11 lines
                     self._result[i] = OrcaJobDescriptor(out_name = out_fn ,failed = res.orca_failed,  calc_type = res.calc_type, end_lines = res.end_lines, hess_file_name = hess_fn)
-                    
+                ####Unblake Dev Shit Again
     def _spawn_workers(self, fx: Awaitable, n=1):
         if hasattr(self, "_worker_pool"):
             raise Exception("")
@@ -309,11 +331,13 @@ class AsyncConcurrent:
         other_err = 0
         not_started = 0
 
-        for x in self._result:
+        for i, x in enumerate(self._result):
             if isinstance(x, Exception) and isinstance(x, aio.TimeoutError):
                 timed_out += 1
+                warnings.warn(f"Molecule {self.collection[i].name} timed out")
             elif isinstance(x, Exception):
                 other_err += 1
+                warnings.warn(f"Molecule {self.collection[i].name} exception: {type(x)} {x}")
             elif x is None:
                 not_started += 1
             else:
@@ -348,9 +372,6 @@ class AsyncConcurrent:
                 b = self._bypassed
                 br = self._bypassed / total
 
-                if total - b == 0:
-                    break
-
                 s = success - b
                 try:
                     sr = s / (total - b)
@@ -364,8 +385,10 @@ class AsyncConcurrent:
                 else:
                     eta = "..."
 
+                _workers = len(self._worker_pool)
+
                 print(
-                    f"{datetime.now() - start} --- successful {sr:>6.1%} ({s:>7}) --- failed {er:>6.1%} ({e:>7}) --- ETA {eta}",
+                    f"{datetime.now() - start} --- successful {sr:>6.1%} ({s:>7}) --- failed {er:>6.1%} ({e:>7}) --- ETA {eta} --- WORKERS {_workers}",
                     flush=True,
                 )
 
@@ -389,7 +412,7 @@ class AsyncConcurrent:
 
             async def f(m):
                 return await fx(m, **kwargs)
-
+         
             return self._exec(f)
 
         return inner

@@ -28,6 +28,7 @@ class AsyncORCADriver(AsyncExternalDriver):
         addtl_settings = 'rijcosx def2/j tightscf nopop miniprint',
         charge: int = 0,
         spin_multiplicity: int = 1,
+        already_completed: bool = False
         ):
         """
             General Orca Driver to Create a File and run calculations. Currently usable for the following calculations: "sp","opt","freq", "opt freq".
@@ -62,8 +63,12 @@ class AsyncORCADriver(AsyncExternalDriver):
         if calc_type == 'opt freq':
             calc_type = 'opt_freq'
 
-        _cmd = f"""{orca_path} {nn}_{calc_type}.inp > {nn}_{calc_type}.out"""
-
+        if already_completed:
+            _cmd = f':'
+        else:
+            _cmd = f"""{orca_path} {nn}_{calc_type}.inp > {nn}_{calc_type}.out"""
+        
+        # print(_cmd)
         code, files, stdout, stderr = await self.aexec(
             _cmd,
             inp_files={f"{nn}_{calc_type}.inp": _inp},
@@ -78,7 +83,8 @@ class AsyncORCADriver(AsyncExternalDriver):
         try:
             _out = files[f'{nn}_{calc_type}.out']
         except:
-            raise FileNotFoundError(f'{nn}_{calc_type}.out')
+            # print(FileNotFoundError(f'{nn}_{calc_type}.out'))
+            _out = None
 
         orca_obj = Orca_Out_Recognize(name = f'{nn}', output_file = _out, calc_type = calc_type, hess_file = _hess)
         
