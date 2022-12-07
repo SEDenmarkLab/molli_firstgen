@@ -1,5 +1,6 @@
 from ._core import AsyncExternalDriver
 from ..dtypes import Atom, Bond, Molecule, CartesianGeometry
+from ..parsing import extract_xtb_atomic_properties
 from copy import deepcopy
 from datetime import datetime
 from glob import glob
@@ -159,7 +160,11 @@ class AsyncXTBDriver(AsyncExternalDriver):
         inp += "$end\n"
 
         m1 = await self.optimize(
-            mol, method=method, crit="crude", xtbinp=inp, in_place=False,
+            mol,
+            method=method,
+            crit="crude",
+            xtbinp=inp,
+            in_place=False,
         )
 
         return m1
@@ -205,10 +210,10 @@ class AsyncXTBDriver(AsyncExternalDriver):
         net_charge: int = 0,
     ):
         """
-            Compute atomic charges using XTB methodology
+        Compute atomic charges using XTB methodology
 
-            FIXED 2022-02-23: added at least a partial support for total charge of the molecule.
-            DO NOT USE unless you know what you are doing. -SAS
+        FIXED 2022-02-23: added at least a partial support for total charge of the molecule.
+        DO NOT USE unless you know what you are doing. -SAS
         """
         xyz = mol.to_xyz(n=0)
         _cmd = f"""xtb struct.xyz --sp --{method} --acc {accuracy:0.2f} --chrg {net_charge}"""
@@ -221,9 +226,45 @@ class AsyncXTBDriver(AsyncExternalDriver):
 
         return charges
 
+    #### Ian dev on roche atomic properties
+
+    async def atom_prop(self, xyz: str, method: str = "gfn2", accuracy: float = 0.5):
+        """
+        Compute fukui indices, polarizability, charge, dispersion coeff, and max wiberg bond order for atoms
+
+        """
+        _cmd = (
+            f"""xtb struct.xyz --{method} --acc {accuracy:0.2f} --vfukui > xtbout.log"""
+        )
+        code, files, stdout, stderr = await self.aexec(
+            _cmd, inp_files={f"struct.xyz": xyz}, out_files=["xtbout.log"]
+        )
+        # output = stdout
+        # print(files)
+        # print(stdout)
+        outdf = extract_xtb_atomic_properties(files["xtbout.log"])
+        return outdf
+
+    async def conformer_atom_props(
+        self, mol: Molecule, method: str = "gfn2", accuracy: float = 1.0
+    ):
+        """
+        Compute fukui indices, polarizability, charge, dispersion coeff, and max wiberg bond order for atoms of
+        all conformers.
+        """
+        xyzs = mol.confs_to_xyzs()
+        conf_props = []
+        for i, xyz in enumerate(xyzs):
+            # print(xyz)
+            prop_df = await self.atom_prop(xyz, method=method, accuracy=accuracy)
+            conf_props.append(prop_df)
+        return conf_props
+
+    #### Ian dev end
+
     @staticmethod
     def gen_bond_constraints(mol: Molecule, bonds: List[Bond]):
-        """ Generate bond distance constraint list """
+        """Generate bond distance constraint list"""
         constr = ""
         for b in bonds:
             a1, a2 = mol.get_atom_idx(b.a1), mol.get_atom_idx(b.a2)
@@ -232,7 +273,7 @@ class AsyncXTBDriver(AsyncExternalDriver):
 
     @staticmethod
     def gen_angle_constraints(mol: Molecule, atoms: List[Atom]):
-        """ Generate constraints for all angles where atom is the middle atom """
+        """Generate constraints for all angles where atom is the middle atom"""
         constr = ""
         for a in atoms:
             neigbors = mol.get_connected_atoms(a)

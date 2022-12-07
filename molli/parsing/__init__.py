@@ -6,3 +6,4 @@
 """
 
 from .cdxml import split_cdxml
+from .xtbout import extract_xtb_atomic_properties
