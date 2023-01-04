@@ -301,7 +301,7 @@ class AsyncConcurrent:
                         prefix=f"{res.name}_{res.calc_type}.", suffix=".hess", dir=self.backup_dir
                         )
                         with open(hess_fn, "wt") as f:
-                            f.write(res.output_file)
+                            f.write(res.hess_file)
                         os.close(_)
                         # hess_file_name = hess_fn
                     else:
