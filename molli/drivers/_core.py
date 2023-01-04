@@ -121,6 +121,7 @@ class OrcaJobDescriptor:
     '''
     Used to avoid opening entire out file
     '''
+    mol_name: str
     out_name: str
     failed: bool
     calc_type: str 
@@ -246,7 +247,7 @@ class AsyncConcurrent:
                 else:
                     # print("... success! Bypassing.")  
                     #This returns the result
-                    self._result[i] = OrcaJobDescriptor(out_name = backed_up[0], failed=orca_failed, calc_type = calc_type, end_lines = end_lines, hess_file_name = hess_file_name)
+                    self._result[i] = OrcaJobDescriptor(mol_name =m.name, out_name = backed_up[0], failed=orca_failed, calc_type = calc_type, end_lines = end_lines, hess_file_name = hess_file_name)
                     self._bypassed += 1
             ####End of Blake doing some weird stuff with DFT output files####
               
