@@ -152,11 +152,14 @@ class Orca_Out_Recognize:
         output_file: str,
         calc_type: str,
         hess_file: str,
+        gbw_file: str,
     ):
         self.name = name
         self.output_file = output_file
         self.calc_type = calc_type
         self.hess_file = hess_file
+        self.gbw_file = gbw_file
+
         if output_file is not None:
             self.end_line_list = output_file.split('\n')[-11:]
             self.fixed_err = [f'{x}\n' for x in self.end_line_list]

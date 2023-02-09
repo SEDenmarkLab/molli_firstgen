@@ -31,7 +31,6 @@ class AsyncExternalDriver:
     def __init__(
         self, name="", scratch_dir: str = "", nprocs: int = 1, encoding: str = "utf8"
     ):
-        self.name = name
         self.scratch_dir = scratch_dir
         self.nprocs = nprocs
         self.encoding = encoding
@@ -39,6 +38,7 @@ class AsyncExternalDriver:
 
         if not os.path.isdir(scratch_dir):
             os.makedirs(scratch_dir)
+
     async def aexec(
         self, cmd: str, inp_files: Dict[str, str] = dict(), out_files: List[str] = []
     ):
@@ -59,7 +59,7 @@ class AsyncExternalDriver:
             code = await proc.wait()
 
             _out = await proc.stdout.read()
-            _err = await proc.stderr.read()
+            _err = await proc.stdout.read()
 
             stdout = _out.decode(self.encoding)
             stderr = _err.decode(self.encoding)
@@ -111,11 +111,14 @@ class AsyncExternalDriver:
             if not os.path.isfile(path) and strict:
                 raise FileNotFoundError(f)
             elif os.path.isfile(path):
-                with open(path) as fs:
-                    result[f] = fs.read()
+                try:
+                    with open(path, "rt") as fs:
+                        result[f] = fs.read()
+                except:
+                    with open(path, "rb") as fs:
+                        result[f] = fs.read()
         return result
 
-####Blake Dev Stuff Begin####
 @dataclass(repr=True, init=True, frozen=True)
 class OrcaJobDescriptor:
     '''
@@ -127,7 +130,7 @@ class OrcaJobDescriptor:
     calc_type: str 
     end_lines: str
     hess_file_name: str
-####Blake Dev Stuff End#####
+    gbw_file_name: str
 
 class AsyncConcurrent:
     """
@@ -165,7 +168,7 @@ class AsyncConcurrent:
         self.qsize = qsize
         self._result = [None] * len(collection)
         self._bypassed = 0
-        
+
         if not os.path.isdir(self.backup_dir):
             os.makedirs(self.backup_dir)
 
@@ -181,28 +184,12 @@ class AsyncConcurrent:
                     # print("... not good. Queuing up.")
                     self._queue.put_nowait((i, m))
                 else:
-                    print("... success! Bypassing.")
+                    # print("... success! Bypassing.")
                     if len(res.conformers):
                         self._result[i] = res
                         self._bypassed += 1
                     else:
                         self._queue.put_nowait((i, m))
-            ###Blake Attempting to make this more applicable to Ian's Script lol ####
-            elif backed_up := glob((f"{self.backup_dir}/{m.name}_confprops.pkl")):
-                try:
-                    # print(f"Molecule {m.name} has already been done. trying to read the pickle file ", end='')
-                    with open(f"{self.backup_dir}/{m.name}_confprops.pkl", 'rb') as f:
-                        load = pickle.load(f)
-                except:
-                    # print("... not good. Queuing up.")
-                    self._queue.put_nowait((i, m))
-                else:
-                    # print("... success! Bypassing.")                    
-                    self._result[i] = load
-                    self._bypassed += 1
-            ####End of Blake Attempting to make this more applicable to Ian's Script lol ####
-            ####Beginning of Blake doing some weird stuff with DFT output files####
-            #This needs to be altered in the future to allow for a calc_type to be referenced
             elif backed_up := glob((f"{self.backup_dir}/{m.name}*.out")):
                 try:
                     if len(backed_up) >= 1:
@@ -211,6 +198,7 @@ class AsyncConcurrent:
                             general_file_path_list = out_file.split('.')
                             #Returns the most recent calculation done on this
                             calc_type = general_file_path_list[0].split('_')[-1]
+                            print(general_file_path_list)
                             with open(out_file, 'r') as f:
                                 end_line_list = f.readlines()[-11:]
                                 #This is a check to see if the ORCA output terminated normally
@@ -219,6 +207,7 @@ class AsyncConcurrent:
                                     orca_failed = False
                                     fixed_err = [f'{x}\n' for x in end_line_list]
                                     end_lines = ''.join(fixed_err)
+                                    print(out_file)
                                     #Creates general file path not including hash
                                     general_file_path = f"{general_file_path_list[0]}."
                                     backed_up = [out_file]
@@ -229,6 +218,13 @@ class AsyncConcurrent:
                         raise FileNotFoundError('Output File not found! Restarting Calculation')
                     
                     assert len(backed_up) == 1, 'The length of backed_up must be equal to 1.' 
+                    gbw_file_name = None
+                    print(f'{general_file_path}*.gbw')
+                    if len(gbw_back := glob(f"{general_file_path}*.gbw")) == 1:
+                        gbw_file_name = gbw_back[0]
+                    else:
+                        raise FileNotFoundError("GBW file not found in calculation, Calculation must be restared. Restarting...")
+
 
                     hess_file_name = None
                     #Checks to see if frequency was the most recent calculation run
@@ -247,10 +243,9 @@ class AsyncConcurrent:
                 else:
                     # print("... success! Bypassing.")  
                     #This returns the result
-                    self._result[i] = OrcaJobDescriptor(mol_name =m.name, out_name = backed_up[0], failed=orca_failed, calc_type = calc_type, end_lines = end_lines, hess_file_name = hess_file_name)
+                    self._result[i] = OrcaJobDescriptor(mol_name =m.name, out_name = backed_up[0], failed=orca_failed, calc_type = calc_type, end_lines = end_lines, hess_file_name = hess_file_name, gbw_file_name=gbw_file_name)
                     self._bypassed += 1
-            ####End of Blake doing some weird stuff with DFT output files####
-              
+
             else:
                 self._queue.put_nowait((i, m))
 
@@ -286,6 +281,14 @@ class AsyncConcurrent:
                         f.write(res.to_xml())
                     os.close(_)
                 ###Blake Dev Shit Again
+                if isinstance(res, Molecule):
+                    fd, fn = mkstemp(
+                        prefix=f"{res.name}.", suffix=".xml", dir=self.backup_dir
+                    )
+                    with open(fn, "wt") as f:
+                        f.write(res.to_xml())
+
+                    os.close(fd)
                 elif isinstance(res, Orca_Out_Recognize):
                     if res.output_file is not None:
                         _, out_fn = mkstemp(
@@ -304,11 +307,18 @@ class AsyncConcurrent:
                         with open(hess_fn, "wt") as f:
                             f.write(res.hess_file)
                         os.close(_)
-                        # hess_file_name = hess_fn
                     else:
                         hess_fn = None
+                    if res.gbw_file is not None:
+                        _, gbw_fn = mkstemp(
+                        prefix=f"{res.name}_{res.calc_type}.", suffix=".gbw", dir=self.backup_dir
+                        )
+                        with open(gbw_fn, "wb") as f:
+                            f.write(res.gbw_file)
+                        os.close(_)
+
                     #Returning tuple as result including name, if orca failed, calc type, and the last 11 lines
-                    self._result[i] = OrcaJobDescriptor(out_name = out_fn ,failed = res.orca_failed,  calc_type = res.calc_type, end_lines = res.end_lines, hess_file_name = hess_fn)
+                    self._result[i] = OrcaJobDescriptor(mol_name=res.name,out_name = out_fn ,failed = res.orca_failed,  calc_type = res.calc_type, end_lines = res.end_lines, hess_file_name = hess_fn, gbw_file_name=gbw_fn)
                 ####Unblake Dev Shit Again
     def _spawn_workers(self, fx: Awaitable, n=1):
         if hasattr(self, "_worker_pool"):
