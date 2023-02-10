@@ -15,6 +15,7 @@ class AsyncORCADriver(AsyncExternalDriver):
     def __init__(self, name="", scratch_dir="", nprocs=1, encoding="utf8"):
         super().__init__(
             name=name, scratch_dir=scratch_dir, nprocs=nprocs, encoding=encoding)
+        # warn("This explicitly does NOT request the cores you asked for. Fix this later. -SAS")
     async def orca_basic_calc(
         self, 
         mol: Molecule,
@@ -27,7 +28,6 @@ class AsyncORCADriver(AsyncExternalDriver):
         addtl_settings = 'rijcosx def2/j tightscf nopop miniprint',
         charge: int = 0,
         spin_multiplicity: int = 1,
-        already_completed: bool = False
         ):
         """
             General Orca Driver to Create a File and run calculations. Currently usable for the following calculations: "sp","opt","freq", "opt freq".
@@ -62,10 +62,7 @@ class AsyncORCADriver(AsyncExternalDriver):
         if calc_type == 'opt freq':
             calc_type = 'opt_freq'
 
-        if already_completed:
-            _cmd = f':'
-        else:
-            _cmd = f"""{orca_path} {nn}_{calc_type}.inp"""
+        _cmd = f"""{orca_path} {nn}_{calc_type}.inp"""
         
         # print(_cmd)
         code, files, stdout, stderr = await self.aexec(
@@ -98,6 +95,7 @@ class AsyncORCADriver(AsyncExternalDriver):
             print(orca_obj.end_lines)
 
         return orca_obj
+
     async def xyz_energy(self, xyz: str, method="B97-3c sloppyscf"):
         """
             Calculate a single point energy for a given xyz structure

@@ -1,7 +1,6 @@
 from __future__ import annotations
 import asyncio as aio
 from asyncio.subprocess import PIPE
-from dataclasses import dataclass
 from typing import Callable, Dict, List, Awaitable
 from tempfile import TemporaryDirectory as TempDir, NamedTemporaryFile as TempFile
 import functools
@@ -10,10 +9,10 @@ from datetime import datetime
 from tempfile import mkstemp
 import pickle
 from ..dtypes import CollectionFile, Collection, Molecule
+from dataclasses import dataclass
 from ..dtypes.molecule import Orca_Out_Recognize
 from glob import glob
 
-import warnings
 
 class AsyncExternalDriver:
     """
@@ -55,13 +54,14 @@ class AsyncExternalDriver:
 
             _cmd = f"cd {td}; {cmd}"
 
-            proc = await aio.create_subprocess_shell(_cmd, stdout=PIPE, stderr=PIPE)
-            code = await proc.wait()
+            with open(f"{td}/_output", "wt") as f: 
+                proc = await aio.create_subprocess_shell(_cmd, stdout=f, stderr=PIPE)
+                code = await proc.wait()
+                _err = await proc.stderr.read()
 
-            _out = await proc.stdout.read()
-            _err = await proc.stdout.read()
-
-            stdout = _out.decode(self.encoding)
+            with open(f"{td}/_output") as f:
+                stdout = f.read()
+            
             stderr = _err.decode(self.encoding)
 
             files = self.getfiles(td, out_files)
@@ -111,11 +111,11 @@ class AsyncExternalDriver:
             if not os.path.isfile(path) and strict:
                 raise FileNotFoundError(f)
             elif os.path.isfile(path):
-                try:
-                    with open(path, "rt") as fs:
-                        result[f] = fs.read()
-                except:
+                if '.gbw' in path:
                     with open(path, "rb") as fs:
+                        result[f] = fs.read()
+                else:
+                    with open(path, "rt") as fs:
                         result[f] = fs.read()
         return result
 
@@ -190,7 +190,7 @@ class AsyncConcurrent:
                         self._bypassed += 1
                     else:
                         self._queue.put_nowait((i, m))
-            elif backed_up := glob((f"{self.backup_dir}/{m.name}*.out")):
+            elif backed_up := glob(f"{self.backup_dir}/{m.name}*.out"):
                 try:
                     if len(backed_up) >= 1:
                         orca_failed = True
@@ -219,7 +219,7 @@ class AsyncConcurrent:
                     
                     assert len(backed_up) == 1, 'The length of backed_up must be equal to 1.' 
                     gbw_file_name = None
-                    print(f'{general_file_path}*.gbw')
+
                     if len(gbw_back := glob(f"{general_file_path}*.gbw")) == 1:
                         gbw_file_name = gbw_back[0]
                     else:
@@ -249,6 +249,7 @@ class AsyncConcurrent:
             else:
                 self._queue.put_nowait((i, m))
 
+
         print(
             f"=== REQUESTED {len(collection)} :: IN QUEUE {self._queue.qsize()} :: BYPASSED {self._bypassed} ===",
             flush=True,
@@ -274,14 +275,6 @@ class AsyncConcurrent:
                 self._result[i] = res
 
                 if isinstance(res, Molecule):
-                    _, fn = mkstemp(
-                        prefix=f"{mol.name}.", suffix=".xml", dir=self.backup_dir
-                    )
-                    with open(fn, "wt") as f:
-                        f.write(res.to_xml())
-                    os.close(_)
-                ###Blake Dev Shit Again
-                if isinstance(res, Molecule):
                     fd, fn = mkstemp(
                         prefix=f"{res.name}.", suffix=".xml", dir=self.backup_dir
                     )
@@ -291,35 +284,38 @@ class AsyncConcurrent:
                     os.close(fd)
                 elif isinstance(res, Orca_Out_Recognize):
                     if res.output_file is not None:
-                        _, out_fn = mkstemp(
+                        out_fd, out_fn = mkstemp(
                             prefix=f"{res.name}_{res.calc_type}.", suffix=".out", dir=self.backup_dir
                         )
                         with open(out_fn, "wt") as f:
                             f.write(res.output_file)
                             # out_file_name = out_fn
-                        os.close(_)
+                        os.close(out_fd)
                     else:
                         out_fn = None
                     if res.hess_file is not None:
-                        _, hess_fn = mkstemp(
+                        hess_fd, hess_fn = mkstemp(
                         prefix=f"{res.name}_{res.calc_type}.", suffix=".hess", dir=self.backup_dir
                         )
                         with open(hess_fn, "wt") as f:
                             f.write(res.hess_file)
-                        os.close(_)
+                        os.close(hess_fd)
                     else:
                         hess_fn = None
                     if res.gbw_file is not None:
-                        _, gbw_fn = mkstemp(
+                        gbw_fd, gbw_fn = mkstemp(
                         prefix=f"{res.name}_{res.calc_type}.", suffix=".gbw", dir=self.backup_dir
                         )
                         with open(gbw_fn, "wb") as f:
                             f.write(res.gbw_file)
-                        os.close(_)
+                        os.close(gbw_fd)
+                    else:
+                        gbw_fn = None
 
                     #Returning tuple as result including name, if orca failed, calc type, and the last 11 lines
                     self._result[i] = OrcaJobDescriptor(mol_name=res.name,out_name = out_fn ,failed = res.orca_failed,  calc_type = res.calc_type, end_lines = res.end_lines, hess_file_name = hess_fn, gbw_file_name=gbw_fn)
                 ####Unblake Dev Shit Again
+                    
     def _spawn_workers(self, fx: Awaitable, n=1):
         if hasattr(self, "_worker_pool"):
             raise Exception("")
@@ -342,13 +338,11 @@ class AsyncConcurrent:
         other_err = 0
         not_started = 0
 
-        for i, x in enumerate(self._result):
+        for x in self._result:
             if isinstance(x, Exception) and isinstance(x, aio.TimeoutError):
                 timed_out += 1
-                warnings.warn(f"Molecule {self.collection[i].name} timed out")
             elif isinstance(x, Exception):
                 other_err += 1
-                warnings.warn(f"Molecule {self.collection[i].name} exception: {type(x)} {x}")
             elif x is None:
                 not_started += 1
             else:
@@ -379,9 +373,13 @@ class AsyncConcurrent:
             else:
                 break
             finally:
+                
                 total, success, timed_out, other_err, not_started = self.get_status()
                 b = self._bypassed
                 br = self._bypassed / total
+
+                if total - b == 0:
+                    break
 
                 s = success - b
                 try:
@@ -396,12 +394,11 @@ class AsyncConcurrent:
                 else:
                     eta = "..."
 
-                _workers = len(self._worker_pool)
-
                 print(
-                    f"{datetime.now() - start} --- successful {sr:>6.1%} ({s:>7}) --- failed {er:>6.1%} ({e:>7}) --- ETA {eta} --- WORKERS {_workers}",
+                    f"{datetime.now() - start} --- successful {sr:>6.1%} ({s:>7}) --- failed {er:>6.1%} ({e:>7}) --- ETA {eta} WORKERS {self.concurrent}",
                     flush=True,
                 )
+
 
         self._cancel_workers()
         del self._queue
@@ -423,7 +420,7 @@ class AsyncConcurrent:
 
             async def f(m):
                 return await fx(m, **kwargs)
-         
+
             return self._exec(f)
 
         return inner
