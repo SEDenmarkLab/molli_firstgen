@@ -64,7 +64,6 @@ class AsyncORCADriver(AsyncExternalDriver):
 
         _cmd = f"""{orca_path} {nn}_{calc_type}.inp"""
         
-        # print(_cmd)
         code, files, stdout, stderr = await self.aexec(
             _cmd,
             inp_files={f"{nn}_{calc_type}.inp": _inp},
@@ -84,9 +83,8 @@ class AsyncORCADriver(AsyncExternalDriver):
         try:
             _out = stdout
         except:
-            # print(FileNotFoundError(f'{nn}_{calc_type}.out'))
             _out = None
-
+        
         orca_obj = Orca_Out_Recognize(name = f'{nn}', output_file = _out, calc_type = calc_type, hess_file = _hess, gbw_file = _gbw)
         
         if orca_obj.orca_failed:

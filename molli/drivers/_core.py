@@ -190,7 +190,7 @@ class AsyncConcurrent:
                         self._bypassed += 1
                     else:
                         self._queue.put_nowait((i, m))
-            elif backed_up := glob(f"{self.backup_dir}/{m.name}*.out"):
+            elif backed_up := glob(f"{self.backup_dir}/{m.name}_*.out"):
                 try:
                     if len(backed_up) >= 1:
                         orca_failed = True
@@ -198,7 +198,6 @@ class AsyncConcurrent:
                             general_file_path_list = out_file.split('.')
                             #Returns the most recent calculation done on this
                             calc_type = general_file_path_list[0].split('_')[-1]
-                            print(general_file_path_list)
                             with open(out_file, 'r') as f:
                                 end_line_list = f.readlines()[-11:]
                                 #This is a check to see if the ORCA output terminated normally
@@ -207,12 +206,12 @@ class AsyncConcurrent:
                                     orca_failed = False
                                     fixed_err = [f'{x}\n' for x in end_line_list]
                                     end_lines = ''.join(fixed_err)
-                                    print(out_file)
                                     #Creates general file path not including hash
                                     general_file_path = f"{general_file_path_list[0]}."
                                     backed_up = [out_file]
                                     break
                         if orca_failed:
+                            os.remove(out_file)
                             raise FileNotFoundError('ORCA DID NOT TERMINATE NORMALLY')
                     else:
                         raise FileNotFoundError('Output File not found! Restarting Calculation')
@@ -223,8 +222,8 @@ class AsyncConcurrent:
                     if len(gbw_back := glob(f"{general_file_path}*.gbw")) == 1:
                         gbw_file_name = gbw_back[0]
                     else:
+                        os.remove(out_file)
                         raise FileNotFoundError("GBW file not found in calculation, Calculation must be restared. Restarting...")
-
 
                     hess_file_name = None
                     #Checks to see if frequency was the most recent calculation run
@@ -233,6 +232,7 @@ class AsyncConcurrent:
                         if len(hess_back :=glob(f"{general_file_path}*.hess")) == 1:
                             hess_file_name = hess_back[0]
                         elif len(hess_back) < 1:
+                            os.remove(out_file)
                             raise FileNotFoundError('Hessian not found for FREQ calculation. FREQ calculation must be restarted. Restarting...')
                         else:
                             raise NameError('Multiple files found with the general file name, unclear which one is associated with which file, restarting calculation')
@@ -243,7 +243,15 @@ class AsyncConcurrent:
                 else:
                     # print("... success! Bypassing.")  
                     #This returns the result
-                    self._result[i] = OrcaJobDescriptor(mol_name =m.name, out_name = backed_up[0], failed=orca_failed, calc_type = calc_type, end_lines = end_lines, hess_file_name = hess_file_name, gbw_file_name=gbw_file_name)
+                    self._result[i] = OrcaJobDescriptor(
+                        mol_name =m.name, 
+                        out_name = backed_up[0], 
+                        failed=orca_failed, 
+                        calc_type = calc_type, 
+                        end_lines = end_lines, 
+                        hess_file_name = hess_file_name, 
+                        gbw_file_name=gbw_file_name,
+                        )
                     self._bypassed += 1
 
             else:
@@ -311,10 +319,15 @@ class AsyncConcurrent:
                         os.close(gbw_fd)
                     else:
                         gbw_fn = None
-
-                    #Returning tuple as result including name, if orca failed, calc type, and the last 11 lines
-                    self._result[i] = OrcaJobDescriptor(mol_name=res.name,out_name = out_fn ,failed = res.orca_failed,  calc_type = res.calc_type, end_lines = res.end_lines, hess_file_name = hess_fn, gbw_file_name=gbw_fn)
-                ####Unblake Dev Shit Again
+                    
+                    self._result[i] = OrcaJobDescriptor(mol_name=res.name,
+                    out_name = out_fn ,
+                    failed = res.orca_failed,  
+                    calc_type = res.calc_type, 
+                    end_lines = res.end_lines, 
+                    hess_file_name = hess_fn, 
+                    gbw_file_name=gbw_fn, 
+                    )
                     
     def _spawn_workers(self, fx: Awaitable, n=1):
         if hasattr(self, "_worker_pool"):

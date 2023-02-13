@@ -174,6 +174,7 @@ class Orca_Out_Recognize:
             self.fixed_err = None
             self.end_lines = None
             self.orca_failed=None
+
     def search_freqs(self, num_of_freqs: int):
         '''
         Will return a dictionary of number and frequency associated with number (in cm**-1) starting at 6, i.e. {6: 2.82, 7: 16.77 ...} based on the number of frequencies requested
@@ -199,7 +200,29 @@ class Orca_Out_Recognize:
             freq_dict.update({freq_num : freq_value})
 
         return freq_dict
-        
+    
+    def final_xyz(self):
+        '''
+        Will return an xyz block only if the optimization has converged
+        '''
+
+        full_out_len = len(_out := self.output_file.split('\n'))
+        first_idx = full_out_len
+        last_idx = 0
+        while last_idx <= first_idx:
+            for idx,line in enumerate(_out):
+                if line == '                 *** FINAL ENERGY EVALUATION AT THE STATIONARY POINT ***':
+                    first_idx = idx + 6
+                if line == 'CARTESIAN COORDINATES (A.U.)':
+                    last_idx = idx - 3
+
+        xyz_block_list = _out[first_idx:last_idx+1]
+
+        xyz_block = ''.join('\n'.join(xyz_block_list))
+
+        xyz_str = f'{len(xyz_block_list)}\n{self.name}\n{xyz_block}'
+        return xyz_str
+
 class Molecule:
     """
     Molecule is a class that is supposed to be a cornerstone in all cross-talk between different pieces of code.
