@@ -56,7 +56,7 @@ def split_cdxml(file_path: str, enum=False, fmt="m{idx}") -> Collection:
                 l, t, r, b = parse_pos(tb.attrib["BoundingBox"])
             except:
                 pass
-            else:           
+            else:
                 label_coord.append([(r + l) / 2, (b + t) / 2])
                 labels.append(tb.find("./s").text)
 
@@ -84,10 +84,20 @@ def split_cdxml(file_path: str, enum=False, fmt="m{idx}") -> Collection:
 
             if a == None:
                 atom = Atom("C", "C", "C")
-            elif a != None and a.text[0] == "#":
-                atom = Atom("Cl", a.text[1:], "Cl", ap=True)
             else:
-                atom = Atom(a.text, a.text, a.text)
+                # a != None:
+                # print(a.text)
+                # print(a.text.replace("NH2", "N").replace("NH", "N").replace("OH", "O"))
+                atom = Atom(
+                    a.text.replace("NH2", "N").replace("NH", "N").replace("OH", "O"),
+                    a.text.replace("NH2", "N").replace("NH", "N").replace("OH", "O"),
+                    a.text.replace("NH2", "N").replace("NH", "N").replace("OH", "O"),
+                )
+            # elif a != None and a.text[0] == "#": ##This seems like a weirdly specific bug fix
+            #     atom = Atom("Cl", a.text[1:], "Cl", ap=True)
+            # elif a != None and 'H' in a.text[0]
+            # else:
+            #     atom = Atom(a.text, a.text, a.text)
 
             atoms.append(atom)
             atom_ids.append(atom_id)
