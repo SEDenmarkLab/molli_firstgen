@@ -76,12 +76,15 @@ def split_cdxml(file_path: str, enum=False, fmt="m{idx}") -> Collection:
         # bond_ids = []
         geom = []
 
+        geom_hint_nodes = []
+        atom_id_to_text = {}
+
         # Iterate over nodes
         for i, n in enumerate(frag.findall("./n")):  # pylint: disable=unused-variable
             x, y = parse_pos(n.attrib["p"])
             atom_id = n.attrib["id"]
             a = n.find("./t/s")
-
+            atom_id_to_text[atom_id] = a
             if a == None:
                 atom = Atom("C", "C", "C")
             else:
@@ -93,6 +96,8 @@ def split_cdxml(file_path: str, enum=False, fmt="m{idx}") -> Collection:
                     a.text.replace("NH2", "N").replace("NH", "N").replace("OH", "O"),
                     a.text.replace("NH2", "N").replace("NH", "N").replace("OH", "O"),
                 )
+                if a.text in ["S", "P"]:
+                    geom_hint_nodes.append((a.text, atom_id))
             # elif a != None and a.text[0] == "#": ##This seems like a weirdly specific bug fix
             #     atom = Atom("Cl", a.text[1:], "Cl", ap=True)
             # elif a != None and 'H' in a.text[0]
@@ -113,6 +118,31 @@ def split_cdxml(file_path: str, enum=False, fmt="m{idx}") -> Collection:
             #      If the bond contains stereochemical indication:
             #           Add z-coordinate hints
             # ==========================================================
+
+            # ==========================================================
+            #   Add exceptions here to give "hints" for hypervalent
+            #           main-group structure parsing.
+            # ==========================================================
+            for (
+                hint
+            ) in geom_hint_nodes:  # Only runs if hints were found; should be sparse
+                a, id = hint
+                if b.attrib["B"] == id:  # Check if the bond begins at hint atom
+                    if (
+                        atom_id_to_text[b.attrib["E"]] != None
+                        and atom_id_to_text[b.attrib["E"]].text == "O"
+                    ):  # If the partner is an oxygen, add wedge
+                        b.attrib["Display"] = "WedgeBegin"
+                        geom_hint_nodes.remove(hint)  # Only want one execution per hint
+                        print("found start S")
+                elif b.attrib["E"] == id:  # Check if the bond ends at a hint atom
+                    if (
+                        atom_id_to_text[b.attrib["B"]] != None
+                        and atom_id_to_text[b.attrib["B"]].text == "O"
+                    ):  # If the partner is an oxygen, add wedge
+                        b.attrib["Display"] = "WedgeEnd"
+                        geom_hint_nodes.remove(hint)
+                        print("found end S")
 
             if "Display" in b.attrib:
                 f1, f2 = atom_ids.index(id1), atom_ids.index(id2)
