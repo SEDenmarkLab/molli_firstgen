@@ -91,6 +91,16 @@ class Bond:
     def __repr__(self):
         return f"Bond ({self.bond_type}) {self.a1}-{self.a2}"
 
+    def __return_other__(self, a: Atom):
+        """
+        Get the other atom from a bond (if it is present) to query what something is attached to.
+        """
+        assert self.__contains__(a) == True
+        if self.a1 == a:
+            return self.a2
+        else:
+            return self.a1
+
 
 class Fragment:
     """
