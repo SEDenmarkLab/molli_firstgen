@@ -19,6 +19,7 @@ def yield_mol2_block_lines(title, text):
     """
 
     lines = [x.strip() for x in str(text).splitlines()]
+    # print(title)
 
     s = lines.index("@<TRIPOS>{}".format(str(title).strip().upper()))
 
@@ -200,7 +201,7 @@ class Molecule:
             mol2block = mol2block.decode()
 
         ## Retrieving molecule metadata
-        mol2_header = get_mol2_block_lines("molecule", mol2block)
+        mol2_header = get_mol2_block_lines("MOLECULE", mol2block)
         _name = mol2_header[0] if name == None else name
 
         ## Generating the list of atoms and molecular geometry
@@ -220,6 +221,10 @@ class Molecule:
 
         for line in mol2_bonds:
             ls = line.split()
+            if (
+                len(ls) == 0
+            ):  # Writing can add an extra line - this is FROM molli-written files.
+                continue
             a1, a2, bt = int(ls[1]) - 1, int(ls[2]) - 1, ls[3]
             _bonds.append(Bond(_atoms[a1], _atoms[a2], bond_type=bt))
 
