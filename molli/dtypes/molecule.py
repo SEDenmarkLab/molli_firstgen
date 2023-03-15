@@ -270,6 +270,29 @@ class Molecule:
         """
         self.bonds.append(Bond(a1, a2, bond_type=bond_type))
 
+    def add_attachment_atom(
+        self, a1: Atom, a2: Atom, v: np.array, length: float, bond_type=1
+    ):
+        """
+        a1 = atom already in molecule
+        a2 = new atom to add (with labels set, etc)
+        v = direction for new bond to form
+        length = desired length of bond
+        Add an attachment atom to a specific atom in a molecule with a specified direction for the new bond.
+        """
+        # Get x,y,z for attachment point, then add scaled directional vector to get coords for new atom
+        a2_coord = self.geom.get_coord(self.atoms.index(a1)) + (length * v)
+        assert len(a2_coord) == 3
+        # print(self.geom.coord) ## Just checking... before/after
+        # print(self.atoms)
+        a2.set_attachment_point()  # In case they forget
+        self.atoms.append(a2)
+        self.geom.coord = np.append(self.geom.coord, [a2_coord], axis=0)
+        self.add_bond(a1, a2, bond_type=bond_type)
+        self.geom.N += 1  # Have to increment this OR serialization/reading to/from experimental xml format fails
+        # print(self.geom.coord)
+        # print(self.atoms)
+
     def get_bonds_with_atom(self, a: Atom):
         res = []
         for b in self.bonds:
@@ -515,7 +538,7 @@ class Molecule:
         dist: float = 10.0,
     ):
         """
-        Join two molecular fragments with bond a11--a21, delete atoms a21 and a22
+        Join two molecular fragments with bond a11--a21, delete atoms a12 and a22
         """
 
         if m1.has_confomers() or m2.has_confomers():
