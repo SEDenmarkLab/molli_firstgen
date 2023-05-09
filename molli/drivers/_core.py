@@ -219,7 +219,7 @@ class AsyncConcurrent:
                     assert len(backed_up) == 1, 'The length of backed_up must be equal to 1.' 
                     gbw_file_name = None
 
-                    if len(gbw_back := glob(f"{general_file_path}*.gbw")) == 1:
+                    if len(gbw_back := glob(f"{self.backup_dir}/{m.name}_*.gbw")) == 1:
                         gbw_file_name = gbw_back[0]
                     else:
                         os.remove(out_file)
