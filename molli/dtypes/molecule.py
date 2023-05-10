@@ -19,6 +19,7 @@ def yield_mol2_block_lines(title, text):
     """
 
     lines = [x.strip() for x in str(text).splitlines()]
+    # print(title)
 
     s = lines.index("@<TRIPOS>{}".format(str(title).strip().upper()))
 
@@ -90,6 +91,16 @@ class Bond:
 
     def __repr__(self):
         return f"Bond ({self.bond_type}) {self.a1}-{self.a2}"
+
+    def __return_other__(self, a: Atom):
+        """
+        Get the other atom from a bond (if it is present) to query what something is attached to.
+        """
+        assert self.__contains__(a) == True
+        if self.a1 == a:
+            return self.a2
+        else:
+            return self.a1
 
 
 class Fragment:
@@ -190,7 +201,7 @@ class Molecule:
             mol2block = mol2block.decode()
 
         ## Retrieving molecule metadata
-        mol2_header = get_mol2_block_lines("molecule", mol2block)
+        mol2_header = get_mol2_block_lines("MOLECULE", mol2block)
         _name = mol2_header[0] if name == None else name
 
         ## Generating the list of atoms and molecular geometry
@@ -210,6 +221,10 @@ class Molecule:
 
         for line in mol2_bonds:
             ls = line.split()
+            if (
+                len(ls) == 0
+            ):  # Writing can add an extra line - this is FROM molli-written files.
+                continue
             a1, a2, bt = int(ls[1]) - 1, int(ls[2]) - 1, ls[3]
             _bonds.append(Bond(_atoms[a1], _atoms[a2], bond_type=bt))
 
@@ -254,6 +269,29 @@ class Molecule:
         Create an additional bond
         """
         self.bonds.append(Bond(a1, a2, bond_type=bond_type))
+
+    def add_attachment_atom(
+        self, a1: Atom, a2: Atom, v: np.array, length: float, bond_type=1
+    ):
+        """
+        a1 = atom already in molecule
+        a2 = new atom to add (with labels set, etc)
+        v = direction for new bond to form
+        length = desired length of bond
+        Add an attachment atom to a specific atom in a molecule with a specified direction for the new bond.
+        """
+        # Get x,y,z for attachment point, then add scaled directional vector to get coords for new atom
+        a2_coord = self.geom.get_coord(self.atoms.index(a1)) + (length * v)
+        assert len(a2_coord) == 3
+        # print(self.geom.coord) ## Just checking... before/after
+        # print(self.atoms)
+        a2.set_attachment_point()  # In case they forget
+        self.atoms.append(a2)
+        self.geom.coord = np.append(self.geom.coord, [a2_coord], axis=0)
+        self.add_bond(a1, a2, bond_type=bond_type)
+        self.geom.N += 1  # Have to increment this OR serialization/reading to/from experimental xml format fails
+        # print(self.geom.coord)
+        # print(self.atoms)
 
     def get_bonds_with_atom(self, a: Atom):
         res = []
@@ -500,7 +538,7 @@ class Molecule:
         dist: float = 10.0,
     ):
         """
-        Join two molecular fragments with bond a11--a21, delete atoms a21 and a22
+        Join two molecular fragments with bond a11--a21, delete atoms a12 and a22
         """
 
         if m1.has_confomers() or m2.has_confomers():
