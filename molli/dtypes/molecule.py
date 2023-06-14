@@ -153,6 +153,86 @@ def structure_clone(atoms: List[Atom], bonds: List[Bond]) -> (List[Atom], List[B
 
     return new_atoms, new_bonds, old_new_map
 
+class Orca_Out_Recognize:
+    """
+    This builds a quick Orca object that is used with the Orca driver
+    """
+    def __init__(
+        self,
+        name: str,
+        output_file: str,
+        calc_type: str,
+        hess_file: str,
+        gbw_file: str,
+    ):
+        self.name = name
+        self.output_file = output_file
+        self.calc_type = calc_type
+        self.hess_file = hess_file
+        self.gbw_file = gbw_file
+
+        if output_file is not None:
+            self.end_line_list = output_file.split('\n')[-11:]
+            self.fixed_err = [f'{x}\n' for x in self.end_line_list]
+            self.end_lines = ''.join(self.fixed_err)
+
+            if any("ORCA TERMINATED NORMALLY" in x for x in self.end_line_list):
+                self.orca_failed = False
+            else:
+                self.orca_failed = True
+        else:
+            self.end_line_list = None
+            self.fixed_err = None
+            self.end_lines = None
+            self.orca_failed=None
+
+    def search_freqs(self, num_of_freqs: int):
+        '''
+        Will return a dictionary of number and frequency associated with number (in cm**-1) starting at 6, i.e. {6: 2.82, 7: 16.77 ...} based on the number of frequencies requested
+        '''
+        if self.orca_failed is None:
+            print('Orca failed calculation, no vibrational frequencies are registered. Returning None')
+            return None
+        reversed_all_out_lines = self.output_file.split('\n')[::-1]
+        #starts and indexes at the end of the file
+        for idx,line in enumerate(reversed_all_out_lines):
+            if 'VIBRATIONAL FREQUENCIES' == line:
+                first_freq = idx - 10
+                break
+        final_freq = first_freq - num_of_freqs
+
+        freq_requested = reversed_all_out_lines[final_freq:first_freq]
+        freq_dict = dict()
+        for line in freq_requested[::-1]:
+            no_spaces = line.replace(' ','')
+            freq_num = int(no_spaces.split(':')[0])
+            freq_value = float(no_spaces.split(':')[1].split('cm**-1')[0])
+
+            freq_dict.update({freq_num : freq_value})
+
+        return freq_dict
+    
+    def final_xyz(self):
+        '''
+        Will return an xyz block only if the optimization has converged
+        '''
+
+        full_out_len = len(_out := self.output_file.split('\n'))
+        first_idx = full_out_len
+        last_idx = 0
+        while last_idx <= first_idx:
+            for idx,line in enumerate(_out):
+                if line == '                 *** FINAL ENERGY EVALUATION AT THE STATIONARY POINT ***':
+                    first_idx = idx + 6
+                if line == 'CARTESIAN COORDINATES (A.U.)':
+                    last_idx = idx - 3
+
+        xyz_block_list = _out[first_idx:last_idx+1]
+
+        xyz_block = ''.join('\n'.join(xyz_block_list))
+
+        xyz_str = f'{len(xyz_block_list)}\n{self.name}\n{xyz_block}'
+        return xyz_str
 
 class Molecule:
     """

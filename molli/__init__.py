@@ -21,7 +21,7 @@ from . import math
 # These classes represent high level objects
 # NOTE: This list is subject to changes without notification
 
-from .dtypes import Molecule, Collection, CollectionFile
+from .dtypes import Molecule, Orca_Out_Recognize, Collection, CollectionFile
 from .drivers import (
     XTBDriver,
     CRESTDriver,

@@ -9,6 +9,8 @@ from datetime import datetime
 from tempfile import mkstemp
 import pickle
 from ..dtypes import CollectionFile, Collection, Molecule
+from dataclasses import dataclass
+from ..dtypes.molecule import Orca_Out_Recognize
 from glob import glob
 
 
@@ -52,13 +54,14 @@ class AsyncExternalDriver:
 
             _cmd = f"cd {td}; {cmd}"
 
-            proc = await aio.create_subprocess_shell(_cmd, stdout=PIPE, stderr=PIPE)
-            code = await proc.wait()
+            with open(f"{td}/_output", "wt") as f: 
+                proc = await aio.create_subprocess_shell(_cmd, stdout=f, stderr=PIPE)
+                code = await proc.wait()
+                _err = await proc.stderr.read()
 
-            _out = await proc.stdout.read()
-            _err = await proc.stdout.read()
-
-            stdout = _out.decode(self.encoding)
+            with open(f"{td}/_output") as f:
+                stdout = f.read()
+            
             stderr = _err.decode(self.encoding)
 
             files = self.getfiles(td, out_files)
@@ -108,10 +111,26 @@ class AsyncExternalDriver:
             if not os.path.isfile(path) and strict:
                 raise FileNotFoundError(f)
             elif os.path.isfile(path):
-                with open(path) as fs:
-                    result[f] = fs.read()
+                if '.gbw' in path:
+                    with open(path, "rb") as fs:
+                        result[f] = fs.read()
+                else:
+                    with open(path, "rt") as fs:
+                        result[f] = fs.read()
         return result
 
+@dataclass(repr=True, init=True, frozen=True)
+class OrcaJobDescriptor:
+    '''
+    Used to avoid opening entire out file
+    '''
+    mol_name: str
+    out_name: str
+    failed: bool
+    calc_type: str 
+    end_lines: str
+    hess_file_name: str
+    gbw_file_name: str
 
 class AsyncConcurrent:
     """
@@ -171,8 +190,73 @@ class AsyncConcurrent:
                         self._bypassed += 1
                     else:
                         self._queue.put_nowait((i, m))
+            elif backed_up := glob(f"{self.backup_dir}/{m.name}_*.out"):
+                try:
+                    if len(backed_up) >= 1:
+                        orca_failed = True
+                        for out_file in backed_up:
+                            general_file_path_list = out_file.split('.')
+                            #Returns the most recent calculation done on this
+                            calc_type = general_file_path_list[0].split('_')[-1]
+                            with open(out_file, 'r') as f:
+                                end_line_list = f.readlines()[-11:]
+                                #This is a check to see if the ORCA output terminated normally
+                                #In the future, this should be further elaborated upon based on different erroring out messages, especially those regarding SCF non-convergence
+                                if any('ORCA TERMINATED NORMALLY' in x for x in end_line_list):
+                                    orca_failed = False
+                                    fixed_err = [f'{x}\n' for x in end_line_list]
+                                    end_lines = ''.join(fixed_err)
+                                    #Creates general file path not including hash
+                                    general_file_path = f"{general_file_path_list[0]}."
+                                    backed_up = [out_file]
+                                    break
+                        if orca_failed:
+                            os.remove(out_file)
+                            raise FileNotFoundError('ORCA DID NOT TERMINATE NORMALLY')
+                    else:
+                        raise FileNotFoundError('Output File not found! Restarting Calculation')
+                    
+                    assert len(backed_up) == 1, 'The length of backed_up must be equal to 1.' 
+                    gbw_file_name = None
+
+                    if len(gbw_back := glob(f"{self.backup_dir}/{m.name}_*.gbw")) == 1:
+                        gbw_file_name = gbw_back[0]
+                    else:
+                        os.remove(out_file)
+                        raise FileNotFoundError("GBW file not found in calculation, Calculation must be restared. Restarting...")
+
+                    hess_file_name = None
+                    #Checks to see if frequency was the most recent calculation run
+                    if '_freq.' in general_file_path:
+                        #Glob is used to scrape any files and use a special character "*" to allow for collection of all files
+                        if len(hess_back :=glob(f"{general_file_path}*.hess")) == 1:
+                            hess_file_name = hess_back[0]
+                        elif len(hess_back) < 1:
+                            os.remove(out_file)
+                            raise FileNotFoundError('Hessian not found for FREQ calculation. FREQ calculation must be restarted. Restarting...')
+                        else:
+                            raise NameError('Multiple files found with the general file name, unclear which one is associated with which file, restarting calculation')
+                except Exception as e:
+                    # print("... not good. Queuing up.")
+                    print(e)
+                    self._queue.put_nowait((i, m))
+                else:
+                    # print("... success! Bypassing.")  
+                    #This returns the result
+                    self._result[i] = OrcaJobDescriptor(
+                        mol_name =m.name, 
+                        out_name = backed_up[0], 
+                        failed=orca_failed, 
+                        calc_type = calc_type, 
+                        end_lines = end_lines, 
+                        hess_file_name = hess_file_name, 
+                        gbw_file_name=gbw_file_name,
+                        )
+                    self._bypassed += 1
+
             else:
                 self._queue.put_nowait((i, m))
+
 
         print(
             f"=== REQUESTED {len(collection)} :: IN QUEUE {self._queue.qsize()} :: BYPASSED {self._bypassed} ===",
@@ -200,13 +284,51 @@ class AsyncConcurrent:
 
                 if isinstance(res, Molecule):
                     fd, fn = mkstemp(
-                        prefix=f"{mol.name}.", suffix=".xml", dir=self.backup_dir
+                        prefix=f"{res.name}.", suffix=".xml", dir=self.backup_dir
                     )
                     with open(fn, "wt") as f:
                         f.write(res.to_xml())
 
                     os.close(fd)
-
+                elif isinstance(res, Orca_Out_Recognize):
+                    if res.output_file is not None:
+                        out_fd, out_fn = mkstemp(
+                            prefix=f"{res.name}_{res.calc_type}.", suffix=".out", dir=self.backup_dir
+                        )
+                        with open(out_fn, "wt") as f:
+                            f.write(res.output_file)
+                            # out_file_name = out_fn
+                        os.close(out_fd)
+                    else:
+                        out_fn = None
+                    if res.hess_file is not None:
+                        hess_fd, hess_fn = mkstemp(
+                        prefix=f"{res.name}_{res.calc_type}.", suffix=".hess", dir=self.backup_dir
+                        )
+                        with open(hess_fn, "wt") as f:
+                            f.write(res.hess_file)
+                        os.close(hess_fd)
+                    else:
+                        hess_fn = None
+                    if res.gbw_file is not None:
+                        gbw_fd, gbw_fn = mkstemp(
+                        prefix=f"{res.name}_{res.calc_type}.", suffix=".gbw", dir=self.backup_dir
+                        )
+                        with open(gbw_fn, "wb") as f:
+                            f.write(res.gbw_file)
+                        os.close(gbw_fd)
+                    else:
+                        gbw_fn = None
+                    
+                    self._result[i] = OrcaJobDescriptor(mol_name=res.name,
+                    out_name = out_fn ,
+                    failed = res.orca_failed,  
+                    calc_type = res.calc_type, 
+                    end_lines = res.end_lines, 
+                    hess_file_name = hess_fn, 
+                    gbw_file_name=gbw_fn, 
+                    )
+                    
     def _spawn_workers(self, fx: Awaitable, n=1):
         if hasattr(self, "_worker_pool"):
             raise Exception("")
@@ -264,6 +386,7 @@ class AsyncConcurrent:
             else:
                 break
             finally:
+                
                 total, success, timed_out, other_err, not_started = self.get_status()
                 b = self._bypassed
                 br = self._bypassed / total
@@ -285,9 +408,10 @@ class AsyncConcurrent:
                     eta = "..."
 
                 print(
-                    f"{datetime.now() - start} --- successful {sr:>6.1%} ({s:>7}) --- failed {er:>6.1%} ({e:>7}) --- ETA {eta}",
+                    f"{datetime.now() - start} --- successful {sr:>6.1%} ({s:>7}) --- failed {er:>6.1%} ({e:>7}) --- ETA {eta} WORKERS {self.concurrent}",
                     flush=True,
                 )
+
 
         self._cancel_workers()
         del self._queue
