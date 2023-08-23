@@ -50,7 +50,6 @@ class Atom:
         stereo: str = "U",
         ap: bool = False,
     ):
-
         self.label = str(label)
         self.symbol = str(symbol)
         self.atom_type = str(atom_type)
@@ -451,6 +450,9 @@ class Molecule:
         This function embeds alternative geometries (conformers)
         if mode == 'a': append conformers to existing list
         if mode == 'w': overwrite the list of conformers
+        
+        N.B. - ensure to unpack iterable of CartesianGeometry objects with *, or attribute will be
+        [[]] or ([],) instead of []
         """
         if mode == "a":
             self.conformers.extend(deepcopy(confs))
@@ -502,7 +504,6 @@ class Molecule:
 
         if self.conformers:
             for m in self.confs_to_molecules(name_fmt=name_fmt):
-
                 fn = os.path.normpath(os.path.join(path, f"{m.name}.mol2"))
 
                 with open(fn, "wt") as f:
@@ -767,7 +768,6 @@ class Molecule:
 
     @classmethod
     def from_file(cls, fref: str | IOBase):
-
         # Determine file extension
         if isinstance(fref, str):
             ext = fref.rsplit(".", 1)[1]

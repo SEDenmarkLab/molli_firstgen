@@ -9,20 +9,20 @@ from math import ceil, pi
 from itertools import combinations
 import asyncio as aio
 
+
 def _parse_energies(_n: str):
     """
-        Parse energies in the form of
-        1   0.000
-        2   1.131
+    Parse energies in the form of
+    1   0.000
+    2   1.131
     """
     energies = []
     for l in _n.splitlines(keepends=False):
         if l:
             e = float(l.split()[1])
             energies.append(e)
-    
-    return energies
 
+    return energies
 
 
 class AsyncCRESTDriver(AsyncExternalDriver):
@@ -40,8 +40,8 @@ class AsyncCRESTDriver(AsyncExternalDriver):
         mddump: float = 250.0,
         vbdump: float = 1.0,
         chk_topo: bool = False,
-        constr_val_angles: list = ['P', 'Cu'],
-        force_const: float = 0.05
+        constr_val_angles: list = [],
+        force_const: float = 0.05,
     ):
         """
         `ewin`: energy window in kcal/mol
@@ -55,6 +55,7 @@ class AsyncCRESTDriver(AsyncExternalDriver):
         atoms_constr = []
         for a in constr_val_angles:
             atoms_constr.extend(mol.get_atoms_by_symbol(a))
+
         cinp = "$constrain\n"
         cinp += self.gen_angle_constraints(mol, atoms_constr)
         cinp += "$end\n"
@@ -66,10 +67,10 @@ class AsyncCRESTDriver(AsyncExternalDriver):
 
         if not chk_topo:
             _cmd += " --noreftopo"
-        
+
         if constr_val_angles:
             _cmd += f" -cinp {nn}_constraint.inp -fc {force_const:0.4f}"
-        
+
         ### EXECUTE CREST CODE
         code, files, stdout, stderr = await self.aexec(
             _cmd,
@@ -94,20 +95,22 @@ class AsyncCRESTDriver(AsyncExternalDriver):
         ewin: float = 6.0,
     ):
         """
-        Any conformer ensemble present in a molecule is reoptimized with the selected method, 
+        Any conformer ensemble present in a molecule is reoptimized with the selected method,
         then pruned and sorted by energies. Useful in eliminating redundancies from deficiencies of GFN-FF, for instance.
         """
         nn = mol.name
         confs = mol.confs_to_multixyz()
 
-        _cmd = f"""crest -screen {nn}_confs.xyz -{method} -ewin {ewin} -T {self.nprocs} """
+        _cmd = (
+            f"""crest -screen {nn}_confs.xyz -{method} -ewin {ewin} -T {self.nprocs} """
+        )
 
         code, files, stdout, stderr = await self.aexec(
             _cmd,
             inp_files={f"{nn}_confs.xyz": confs},
-            out_files=["crest_ensemble.xyz", "crest.energies"]
+            out_files=["crest_ensemble.xyz", "crest.energies"],
         )
-        
+
         ens1 = files["crest_ensemble.xyz"]
         nrgs1 = files["crest.energies"]
 
@@ -119,13 +122,11 @@ class AsyncCRESTDriver(AsyncExternalDriver):
         return _mol
 
         ### ADD CONFORMER PROPERTIES !!! ###
-        # return (code, files, stdout, stderr) 
-
-
+        # return (code, files, stdout, stderr)
 
     @staticmethod
     def gen_angle_constraints(mol: Molecule, atoms: List[Atom]):
-        """ Generate constraints for all angles where atom is the middle atom """
+        """Generate constraints for all angles where atom is the middle atom"""
         constr = ""
         for a in atoms:
             neigbors = mol.get_connected_atoms(a)
