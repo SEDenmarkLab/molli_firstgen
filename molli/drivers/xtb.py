@@ -11,6 +11,7 @@ import numpy as np
 from itertools import combinations
 import asyncio as aio
 import re
+import pandas as pd
 
 
 class AsyncXTBDriver(AsyncExternalDriver):
@@ -228,7 +229,7 @@ class AsyncXTBDriver(AsyncExternalDriver):
 
     #### Ian dev on roche atomic properties
 
-    async def atom_prop(self, xyz: str, method: str = "gfn2", accuracy: float = 0.5):
+    async def atom_prop(self, xyz: str, method: str = "gfn2", accuracy: float = 1.0):
         """
         Compute fukui indices, polarizability, charge, dispersion coeff, and max wiberg bond order for atoms
 
@@ -257,7 +258,7 @@ class AsyncXTBDriver(AsyncExternalDriver):
         for i, xyz in enumerate(xyzs):
             # print(xyz)
             prop_df = await self.atom_prop(xyz, method=method, accuracy=accuracy)
-            conf_props.append(prop_df)
+            conf_props.append(prop_df.to_dict(orient='index'))
         return conf_props
 
     #### Ian dev end
