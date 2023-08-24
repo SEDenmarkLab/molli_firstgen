@@ -158,9 +158,20 @@ def extract_xtb_atomic_properties(xtbout: str, xtb_coef=True, fukui=True, wiberg
     if wiberg == True:
         df3 = get_xtb_wiberg(filestr, sections)
         out.append(df3)
-    if None in out:
-        raise Exception(f"Atom property parsing failed - check output files")
-    outdf = pd.concat(out, axis=1)
+    # if None in out:
+    #     raise Exception(f"Atom property parsing failed - check output files")
+    try:
+        outdf = pd.concat(out, axis=1)
+    except:
+        raise Exception(f"Atom property parsing failed - check input files and _cmd")
     name = get_xtbout_name(filestr)
     outdf.name = name
     return outdf
+
+
+if __name__ == "__main__":
+    fp = rf"/home/nir2/somn_container_dev/xtbout.log"
+    with open(fp, "r") as g:
+        filestr = g.read()
+    out = extract_xtb_atomic_properties(filestr)
+    print(out)

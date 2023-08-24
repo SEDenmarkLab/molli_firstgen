@@ -243,10 +243,8 @@ class AsyncXTBDriver(AsyncExternalDriver):
         # output = stdout
         # print(files)
         # print(stdout)
-        outdf = extract_xtb_atomic_properties(
-            files["xtbout.log"], fukui=True, xtb_coef=True, wiberg=True
-        )
-        return outdf.to_dict(orient="index")
+        outdf = extract_xtb_atomic_properties(files["xtbout.log"])
+        return outdf
 
     async def conformer_atom_props(
         self, mol: Molecule, method: str = "gfn2", accuracy: float = 1.0
@@ -260,8 +258,7 @@ class AsyncXTBDriver(AsyncExternalDriver):
         for i, xyz in enumerate(xyzs):
             # print(xyz)
             prop_df = await self.atom_prop(xyz, method=method, accuracy=accuracy)
-            # conf_props.append(prop_df.to_dict(orient="index"))
-            conf_props.append(prop_df)
+            conf_props.append(prop_df.to_dict(orient='index'))
         return conf_props
 
     #### Ian dev end
