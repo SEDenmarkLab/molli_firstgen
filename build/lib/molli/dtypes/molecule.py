@@ -451,6 +451,9 @@ class Molecule:
         This function embeds alternative geometries (conformers)
         if mode == 'a': append conformers to existing list
         if mode == 'w': overwrite the list of conformers
+        
+        N.B. - ensure to unpack iterable of CartesianGeometry objects with *, or attribute will be
+        [[]] or ([],) instead of []
         """
         if mode == "a":
             self.conformers.extend(deepcopy(confs))

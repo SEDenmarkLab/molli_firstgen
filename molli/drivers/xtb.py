@@ -248,6 +248,17 @@ class AsyncXTBDriver(AsyncExternalDriver):
         )
         return outdf.to_dict(orient="index")
 
+    async def molecule_atom_props(
+            self, mol:Molecule,method: str = "gfn2", accuracy: float = 1.0
+    ):
+        """
+        Compute fukui indices, polarizability, charge, dispersion coeff, and max wiberg BO for atoms of
+        a molecule.
+        """
+        xyz = mol.to_xyz()
+        prop_df = await self.atom_prop(xyz,method=method,accuracy=accuracy)
+        return prop_df
+
     async def conformer_atom_props(
         self, mol: Molecule, method: str = "gfn2", accuracy: float = 1.0
     ):
