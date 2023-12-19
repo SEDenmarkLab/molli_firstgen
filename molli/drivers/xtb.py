@@ -257,7 +257,7 @@ class AsyncXTBDriver(AsyncExternalDriver):
         """
         xyz = mol.to_xyz()
         prop_df = await self.atom_prop(xyz,method=method,accuracy=accuracy)
-        return prop_df
+        return [prop_df] #For consistency, this is embedded in a list
 
     async def conformer_atom_props(
         self, mol: Molecule, method: str = "gfn2", accuracy: float = 1.0
