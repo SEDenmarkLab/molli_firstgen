@@ -266,8 +266,10 @@ class AsyncConcurrent:
             finally:
                 total, success, timed_out, other_err, not_started = self.get_status()
                 b = self._bypassed
-                br = self._bypassed / total
-
+                if total != 0:
+                    br = self._bypassed / total
+                if total == 0:
+                    break
                 if total - b == 0:
                     break
 
